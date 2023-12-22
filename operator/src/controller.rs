@@ -24,6 +24,11 @@ pub static OGMIOS_PORT_FINALIZER: &str = "ogmiosports.demeter.run";
     namespaced
 )]
 #[kube(status = "OgmiosPortStatus")]
+#[kube(printcolumn = r#"
+        {"name":"Network", "jsonPath": ".spec.network", "type": "string"},
+        {"name": "Endpoint URL", "jsonPath": ".status.endpointUrl",  "type": "string"},
+        {"name": "Auth Token", "jsonPath": ".status.authToken", "type": "string"}
+    "#)]
 #[serde(rename_all = "camelCase")]
 pub struct OgmiosPortSpec {
     pub network: Network,
