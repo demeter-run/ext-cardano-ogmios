@@ -12,7 +12,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 
-use crate::{Error, Metrics, Result, State};
+use crate::{
+    auth::handle_auth,
+    build_private_dns_service_name,
+    gateway::{handle_http_route, handle_reference_grant},
+    Error, Metrics, Network, Result, State,
+};
 
 pub static OGMIOS_PORT_FINALIZER: &str = "ogmiosports.demeter.run";
 
@@ -24,14 +29,29 @@ pub static OGMIOS_PORT_FINALIZER: &str = "ogmiosports.demeter.run";
     namespaced
 )]
 #[kube(status = "OgmiosPortStatus")]
-
-pub struct OgmiosPortSpec {}
+#[serde(rename_all = "camelCase")]
+pub struct OgmiosPortSpec {
+    pub network: Network,
+}
 
 #[derive(Deserialize, Serialize, Clone, Default, Debug, JsonSchema)]
-pub struct OgmiosPortStatus {}
+#[serde(rename_all = "camelCase")]
+pub struct OgmiosPortStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endpoint_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth_token: Option<String>,
+}
 
 impl OgmiosPort {
-    async fn reconcile(&self, _ctx: Arc<Context>) -> Result<Action> {
+    async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
+        let client = ctx.client.clone();
+        let namespace = self.namespace().unwrap();
+
+        let private_dns_service_name = build_private_dns_service_name(&self.spec.network);
+        handle_reference_grant(client.clone(), &namespace, self, &private_dns_service_name).await?;
+        handle_http_route(client.clone(), &namespace, self, &private_dns_service_name).await?;
+        handle_auth(client.clone(), &namespace, self).await?;
         Ok(Action::requeue(Duration::from_secs(5 * 60)))
     }
 
