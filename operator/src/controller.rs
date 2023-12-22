@@ -1,11 +1,6 @@
 use futures::StreamExt;
 use kube::{
-    runtime::{
-        controller::Action,
-        finalizer::{finalizer, Event},
-        watcher::Config as WatcherConfig,
-        Controller,
-    },
+    runtime::{controller::Action, watcher::Config as WatcherConfig, Controller},
     Api, Client, CustomResource, ResourceExt,
 };
 use schemars::JsonSchema;
@@ -43,23 +38,6 @@ pub struct OgmiosPortStatus {
     pub auth_token: Option<String>,
 }
 
-impl OgmiosPort {
-    async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
-        let client = ctx.client.clone();
-        let namespace = self.namespace().unwrap();
-
-        let private_dns_service_name = build_private_dns_service_name(&self.spec.network);
-        handle_reference_grant(client.clone(), &namespace, self, &private_dns_service_name).await?;
-        handle_http_route(client.clone(), &namespace, self, &private_dns_service_name).await?;
-        handle_auth(client.clone(), &namespace, self).await?;
-        Ok(Action::requeue(Duration::from_secs(5 * 60)))
-    }
-
-    async fn cleanup(&self, _: Arc<Context>) -> Result<Action> {
-        Ok(Action::await_change())
-    }
-}
-
 struct Context {
     pub client: Client,
     pub metrics: Metrics,
@@ -71,17 +49,15 @@ impl Context {
 }
 
 async fn reconcile(crd: Arc<OgmiosPort>, ctx: Arc<Context>) -> Result<Action> {
-    let ns = crd.namespace().unwrap();
-    let crds: Api<OgmiosPort> = Api::namespaced(ctx.client.clone(), &ns);
+    let client = ctx.client.clone();
+    let namespace = crd.namespace().unwrap();
 
-    finalizer(&crds, OGMIOS_PORT_FINALIZER, crd, |event| async {
-        match event {
-            Event::Apply(crd) => crd.reconcile(ctx.clone()).await,
-            Event::Cleanup(crd) => crd.cleanup(ctx.clone()).await,
-        }
-    })
-    .await
-    .map_err(|e| Error::FinalizerError(Box::new(e)))
+    let private_dns_service_name = build_private_dns_service_name(&crd.spec.network);
+    handle_reference_grant(client.clone(), &namespace, &crd, &private_dns_service_name).await?;
+    handle_http_route(client.clone(), &namespace, &crd, &private_dns_service_name).await?;
+    handle_auth(client.clone(), &namespace, &crd).await?;
+
+    Ok(Action::await_change())
 }
 
 fn error_policy(crd: Arc<OgmiosPort>, err: &Error, ctx: Arc<Context>) -> Action {
