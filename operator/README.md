@@ -1,6 +1,6 @@
-# Ext Cardano Ogmios
+# Ext Cardano Ogmios Operator
 
-This project allow demeter to run and expose ogmios
+This operator allow demeter to run and expose ogmios
 
 ## Environment
 
