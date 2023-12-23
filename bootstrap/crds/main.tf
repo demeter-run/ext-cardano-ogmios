@@ -24,7 +24,7 @@ resource "kubernetes_manifest" "customresourcedefinition_ogmiosports_demeter_run
               "type" = "string"
             },
             {
-              "jsonPath" = ".spec.network"
+              "jsonPath" = ".spec.version"
               "name" = "Version"
               "type" = "number"
             },

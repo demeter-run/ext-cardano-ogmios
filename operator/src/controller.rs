@@ -26,7 +26,7 @@ pub static OGMIOS_PORT_FINALIZER: &str = "ogmiosports.demeter.run";
 #[kube(status = "OgmiosPortStatus")]
 #[kube(printcolumn = r#"
         {"name": "Network", "jsonPath": ".spec.network", "type": "string"},
-        {"name": "Version", "jsonPath": ".spec.network", "type": "number"},
+        {"name": "Version", "jsonPath": ".spec.version", "type": "number"},
         {"name": "Endpoint URL", "jsonPath": ".status.endpointUrl",  "type": "string"},
         {"name": "Auth Token", "jsonPath": ".status.authToken", "type": "string"}
     "#)]
