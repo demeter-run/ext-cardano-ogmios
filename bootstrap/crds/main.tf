@@ -24,6 +24,11 @@ resource "kubernetes_manifest" "customresourcedefinition_ogmiosports_demeter_run
               "type" = "string"
             },
             {
+              "jsonPath" = ".spec.network"
+              "name" = "Version"
+              "type" = "number"
+            },
+            {
               "jsonPath" = ".status.endpointUrl"
               "name" = "Endpoint URL"
               "type" = "string"
@@ -50,9 +55,15 @@ resource "kubernetes_manifest" "customresourcedefinition_ogmiosports_demeter_run
                       ]
                       "type" = "string"
                     }
+                    "version" = {
+                      "format" = "uint8"
+                      "minimum" = 0
+                      "type" = "integer"
+                    }
                   }
                   "required" = [
                     "network",
+                    "version",
                   ]
                   "type" = "object"
                 }
