@@ -25,13 +25,15 @@ pub static OGMIOS_PORT_FINALIZER: &str = "ogmiosports.demeter.run";
 )]
 #[kube(status = "OgmiosPortStatus")]
 #[kube(printcolumn = r#"
-        {"name":"Network", "jsonPath": ".spec.network", "type": "string"},
+        {"name": "Network", "jsonPath": ".spec.network", "type": "string"},
+        {"name": "Version", "jsonPath": ".spec.network", "type": "number"},
         {"name": "Endpoint URL", "jsonPath": ".status.endpointUrl",  "type": "string"},
         {"name": "Auth Token", "jsonPath": ".status.authToken", "type": "string"}
     "#)]
 #[serde(rename_all = "camelCase")]
 pub struct OgmiosPortSpec {
     pub network: Network,
+    pub version: u8,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default, Debug, JsonSchema)]
@@ -57,7 +59,8 @@ async fn reconcile(crd: Arc<OgmiosPort>, ctx: Arc<Context>) -> Result<Action> {
     let client = ctx.client.clone();
     let namespace = crd.namespace().unwrap();
 
-    let private_dns_service_name = build_private_dns_service_name(&crd.spec.network);
+    let private_dns_service_name =
+        build_private_dns_service_name(&crd.spec.network, &crd.spec.version);
     handle_reference_grant(client.clone(), &namespace, &crd, &private_dns_service_name).await?;
     handle_http_route(client.clone(), &namespace, &crd, &private_dns_service_name).await?;
     handle_auth(client.clone(), &namespace, &crd).await?;

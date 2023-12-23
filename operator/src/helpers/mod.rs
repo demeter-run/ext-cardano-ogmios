@@ -109,13 +109,13 @@ pub async fn patch_resource_status(
 }
 
 pub fn get_auth_name(name: &str) -> String {
-    format!("ogmios-auth-{}", name)
+    format!("ogmios-auth-{name}")
 }
 
 pub fn get_acl_name(name: &str) -> String {
-    format!("ogmios-acl-{}", name)
+    format!("ogmios-acl-{name}")
 }
 
-pub fn build_private_dns_service_name(network: &Network) -> String {
-    format!("ogmios-{}", network)
+pub fn build_private_dns_service_name(network: &Network, version: &u8) -> String {
+    format!("ogmios-{network}-{version}")
 }
