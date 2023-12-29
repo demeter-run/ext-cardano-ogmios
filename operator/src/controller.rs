@@ -6,7 +6,7 @@ use kube::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 use crate::{
     auth::handle_auth,
@@ -70,6 +70,7 @@ async fn reconcile(crd: Arc<OgmiosPort>, ctx: Arc<Context>) -> Result<Action> {
 }
 
 fn error_policy(crd: Arc<OgmiosPort>, err: &Error, ctx: Arc<Context>) -> Action {
+    error!(error = err.to_string(), "reconcile failed");
     ctx.metrics.reconcile_failure(&crd, err);
     Action::requeue(Duration::from_secs(5))
 }
