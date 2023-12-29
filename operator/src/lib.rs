@@ -10,9 +10,6 @@ pub enum Error {
     #[error("Kube Error: {0}")]
     KubeError(#[source] kube::Error),
 
-    #[error("Finalizer Error: {0}")]
-    FinalizerError(#[source] Box<kube::runtime::finalizer::Error<Error>>),
-
     #[error("Argon Error: {0}")]
     ArgonError(String),
 

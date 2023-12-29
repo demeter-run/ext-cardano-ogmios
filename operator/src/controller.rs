@@ -6,6 +6,7 @@ use kube::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
+use tracing::{info, instrument};
 
 use crate::{
     auth::handle_auth,
@@ -73,7 +74,10 @@ fn error_policy(crd: Arc<OgmiosPort>, err: &Error, ctx: Arc<Context>) -> Action 
     Action::requeue(Duration::from_secs(5))
 }
 
+#[instrument("controller run", skip_all)]
 pub async fn run(state: Arc<State>) -> Result<(), Error> {
+    info!("listening crds running");
+
     let client = Client::try_default().await?;
     let crds = Api::<OgmiosPort>::all(client.clone());
     let ctx = Context::new(client, state.metrics.clone());

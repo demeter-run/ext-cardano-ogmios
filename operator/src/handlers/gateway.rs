@@ -1,6 +1,7 @@
 use kube::{core::ObjectMeta, Client, CustomResourceExt, Resource, ResourceExt};
 use serde::Deserialize;
 use serde_json::{json, Value as JsonValue};
+use tracing::info;
 
 use crate::{
     create_resource, get_acl_name, get_auth_name, get_config, get_resource, http_route,
@@ -23,10 +24,10 @@ pub async fn handle_http_route(
     let (metadata, data, raw) = route(&name, &host_name, resource, private_dns_service_name)?;
 
     if result.is_some() {
-        println!("Updating http route for {}", resource.name_any());
+        info!(resource = resource.name_any(), "Updating http route");
         patch_resource(client.clone(), namespace, http_route, &name, raw).await?;
     } else {
-        println!("Creating http route for {}", resource.name_any());
+        info!(resource = resource.name_any(), "Creating http route");
         create_resource(client.clone(), namespace, http_route, metadata, data).await?;
     }
 
@@ -60,7 +61,7 @@ pub async fn handle_reference_grant(
     let (metadata, data, raw) = grant(&name, private_dns_service_name, namespace)?;
 
     if result.is_some() {
-        println!("Updating reference grant for {}", resource.name_any());
+        info!(resource = resource.name_any(), "Updating reference grant");
         patch_resource(
             client.clone(),
             &config.namespace,
@@ -70,7 +71,7 @@ pub async fn handle_reference_grant(
         )
         .await?;
     } else {
-        println!("Creating reference grant for {}", resource.name_any());
+        info!(resource = resource.name_any(), "Creating reference grant");
         // we need to get the deserialized payload
         create_resource(
             client.clone(),
