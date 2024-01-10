@@ -112,6 +112,10 @@ pub fn get_auth_name(name: &str) -> String {
     format!("ogmios-auth-{name}")
 }
 
+pub fn get_host_key_name(name: &str) -> String {
+    format!("ogmios-host-key-{name}")
+}
+
 pub fn get_acl_name(name: &str) -> String {
     format!("ogmios-acl-{name}")
 }

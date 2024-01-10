@@ -16,18 +16,21 @@ use std::collections::BTreeMap;
 use tracing::info;
 
 use crate::{
-    create_resource, get_acl_name, get_auth_name, get_config, get_resource, kong_consumer,
-    kong_plugin, patch_resource, patch_resource_status, Error, OgmiosPort, OgmiosPortStatus,
+    create_resource, get_acl_name, get_auth_name, get_config, get_host_key_name, get_resource,
+    kong_consumer, kong_plugin, patch_resource, patch_resource_status, Error, OgmiosPort,
+    OgmiosPortStatus,
 };
 
 pub async fn handle_auth(client: Client, crd: &OgmiosPort) -> Result<(), Error> {
     handle_auth_secret(client.clone(), crd).await?;
     handle_auth_plugin(client.clone(), crd).await?;
+    handle_host_key_plugin(client.clone(), crd).await?;
 
     handle_acl_secret(client.clone(), crd).await?;
     handle_acl_plugin(client.clone(), crd).await?;
 
     handle_consumer(client.clone(), crd).await?;
+
     Ok(())
 }
 
@@ -40,7 +43,7 @@ async fn handle_auth_secret(client: Client, crd: &OgmiosPort) -> Result<(), Erro
 
     let api = Api::<Secret>::namespaced(client.clone(), &namespace);
 
-    let secret = auth_secret(&name, &api_key, crd.clone());
+    let secret = build_auth_secret(&name, &api_key, crd.clone());
     let result = api.get_opt(&name).await?;
 
     if result.is_some() {
@@ -77,13 +80,32 @@ async fn handle_auth_plugin(client: Client, crd: &OgmiosPort) -> Result<(), Erro
     let kong_plugin = kong_plugin();
 
     let result = get_resource(client.clone(), &namespace, &kong_plugin, &name).await?;
-    let (metadata, data, raw) = auth_plugin(crd.clone())?;
+    let (metadata, data, raw) = build_auth_plugin(crd.clone())?;
 
     if result.is_some() {
         info!(resource = crd.name_any(), "Updating auth plugin");
         patch_resource(client.clone(), &namespace, kong_plugin, &name, raw).await?;
     } else {
         info!(resource = crd.name_any(), "Creating auth plugin");
+        create_resource(client.clone(), &namespace, kong_plugin, metadata, data).await?;
+    }
+    Ok(())
+}
+
+async fn handle_host_key_plugin(client: Client, crd: &OgmiosPort) -> Result<(), Error> {
+    let namespace = crd.namespace().unwrap();
+
+    let name = get_host_key_name(&crd.name_any());
+    let kong_plugin = kong_plugin();
+
+    let result = get_resource(client.clone(), &namespace, &kong_plugin, &name).await?;
+    let (metadata, data, raw) = build_host_key_plugin(crd.clone())?;
+
+    if result.is_some() {
+        info!(resource = crd.name_any(), "Updating host key plugin");
+        patch_resource(client.clone(), &namespace, kong_plugin, &name, raw).await?;
+    } else {
+        info!(resource = crd.name_any(), "Creating host key plugin");
         create_resource(client.clone(), &namespace, kong_plugin, metadata, data).await?;
     }
     Ok(())
@@ -96,7 +118,7 @@ async fn handle_acl_secret(client: Client, crd: &OgmiosPort) -> Result<(), Error
 
     let api = Api::<Secret>::namespaced(client.clone(), &namespace);
 
-    let secret = acl_secret(&name, crd.clone());
+    let secret = build_acl_secret(&name, crd.clone());
     let result = api.get_opt(&name).await?;
 
     if result.is_some() {
@@ -120,7 +142,7 @@ async fn handle_acl_plugin(client: Client, crd: &OgmiosPort) -> Result<(), Error
     let kong_plugin = kong_plugin();
 
     let result = get_resource(client.clone(), &namespace, &kong_plugin, &name).await?;
-    let (metadata, data, raw) = acl_plugin(crd.clone())?;
+    let (metadata, data, raw) = build_acl_plugin(crd.clone())?;
 
     if result.is_some() {
         info!(resource = crd.name_any(), "Updating acl plugin");
@@ -139,7 +161,7 @@ async fn handle_consumer(client: Client, crd: &OgmiosPort) -> Result<(), Error> 
     let kong_consumer = kong_consumer();
 
     let result = get_resource(client.clone(), &namespace, &kong_consumer, &name).await?;
-    let (metadata, data, raw) = consumer(crd.clone())?;
+    let (metadata, data, raw) = build_consumer(crd.clone())?;
 
     if result.is_some() {
         info!(resource = crd.name_any(), "Updating consumer");
@@ -169,7 +191,7 @@ async fn generate_api_key(name: &str, namespace: &str) -> Result<String, Error> 
     Ok(with_bech)
 }
 
-fn auth_secret(name: &str, api_key: &str, owner: OgmiosPort) -> Secret {
+fn build_auth_secret(name: &str, api_key: &str, owner: OgmiosPort) -> Secret {
     let mut string_data = BTreeMap::new();
     string_data.insert("key".into(), api_key.into());
 
@@ -197,7 +219,7 @@ fn auth_secret(name: &str, api_key: &str, owner: OgmiosPort) -> Secret {
     }
 }
 
-fn auth_plugin(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), Error> {
+fn build_auth_plugin(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), Error> {
     let kong_plugin = kong_plugin();
 
     let metadata = ObjectMeta::deserialize(&json!({
@@ -231,7 +253,38 @@ fn auth_plugin(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), 
     Ok((metadata, data, raw))
 }
 
-fn acl_secret(name: &str, owner: OgmiosPort) -> Secret {
+fn build_host_key_plugin(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), Error> {
+    let kong_plugin = kong_plugin();
+
+    let metadata = ObjectMeta::deserialize(&json!({
+      "name": get_host_key_name(&owner.name_any()),
+      "ownerReferences": [
+        {
+          "apiVersion": OgmiosPort::api_version(&()).to_string(),
+          "kind": OgmiosPort::kind(&()).to_string(),
+          "name": owner.name_any(),
+          "uid": owner.uid()
+        }
+      ]
+    }))?;
+
+    let data = json!({
+      "plugin": "key-to-header",
+      "config": {}
+    });
+
+    let raw = json!({
+        "apiVersion": kong_plugin.api_version,
+        "kind": kong_plugin.kind,
+        "metadata": metadata,
+        "plugin": data["plugin"],
+        "config": data["config"]
+    });
+
+    Ok((metadata, data, raw))
+}
+
+fn build_acl_secret(name: &str, owner: OgmiosPort) -> Secret {
     let mut string_data = BTreeMap::new();
     string_data.insert("group".into(), owner.name_any());
 
@@ -259,7 +312,7 @@ fn acl_secret(name: &str, owner: OgmiosPort) -> Secret {
     }
 }
 
-fn acl_plugin(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), Error> {
+fn build_acl_plugin(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), Error> {
     let kong_plugin = kong_plugin();
 
     let metadata = ObjectMeta::deserialize(&json!({
@@ -292,7 +345,7 @@ fn acl_plugin(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), E
     Ok((metadata, data, raw))
 }
 
-fn consumer(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), Error> {
+fn build_consumer(owner: OgmiosPort) -> Result<(ObjectMeta, JsonValue, JsonValue), Error> {
     let kong_consumer = kong_consumer();
     let config = get_config();
 
