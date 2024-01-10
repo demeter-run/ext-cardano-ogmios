@@ -108,6 +108,14 @@ pub async fn patch_resource_status(
     Ok(())
 }
 
+pub fn get_http_route_name(name: &str) -> String {
+    format!("ogmios-http-route-{}", name)
+}
+
+pub fn get_http_route_key_name(name: &str) -> String {
+    format!("ogmios-http-route-key-{}", name)
+}
+
 pub fn get_auth_name(name: &str) -> String {
     format!("ogmios-auth-{name}")
 }
