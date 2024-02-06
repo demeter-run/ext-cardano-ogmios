@@ -7,8 +7,8 @@ resource "kubernetes_service_v1" "well_known_service" {
   count = var.well_known_service ? 1 : 0
 
   metadata {
-    namespace = var.namespace
     name      = var.network
+    namespace = var.namespace
   }
 
   spec {
