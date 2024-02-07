@@ -13,7 +13,8 @@ resource "kubernetes_service_v1" "well_known_service" {
 
   spec {
     selector = {
-      "demeter.run/instance" = local.name
+      "cardano.demeter.run/network"        = var.network
+      "cardano.demeter.run/ogmios_version" = var.ogmios_version
     }
 
     port {

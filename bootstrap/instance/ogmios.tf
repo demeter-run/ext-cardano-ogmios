@@ -6,7 +6,7 @@ locals {
 
 resource "kubernetes_deployment_v1" "ogmios" {
   metadata {
-    name = local.name
+    name      = local.name
     namespace = var.namespace
     labels = {
       "demeter.run/kind"                   = "OgmiosInstance"
@@ -18,7 +18,9 @@ resource "kubernetes_deployment_v1" "ogmios" {
     replicas = var.replicas
     selector {
       match_labels = {
-        "demeter.run/instance" = local.name
+        "demeter.run/instance"               = local.name
+        "cardano.demeter.run/network"        = var.network
+        "cardano.demeter.run/ogmios_version" = var.ogmios_version
       }
     }
     template {
