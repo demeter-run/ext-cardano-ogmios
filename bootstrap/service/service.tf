@@ -1,4 +1,5 @@
 locals {
+  name = "ogmios-${var.network}-${var.ogmios_version}"
   port = 1337
 }
 
@@ -13,7 +14,7 @@ resource "kubernetes_service_v1" "well_known_service" {
   spec {
     selector = {
       "cardano.demeter.run/network"        = var.network
-      "cardano.demeter.run/ogmios_version" = var.ogmios_version
+      "cardano.demeter.run/ogmios-version" = var.ogmios_version
     }
 
     port {

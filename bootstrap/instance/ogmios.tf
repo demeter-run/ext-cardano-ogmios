@@ -11,7 +11,7 @@ resource "kubernetes_deployment_v1" "ogmios" {
     labels = {
       "demeter.run/kind"                   = "OgmiosInstance"
       "cardano.demeter.run/network"        = var.network
-      "cardano.demeter.run/ogmios_version" = var.ogmios_version
+      "cardano.demeter.run/ogmios-version" = var.ogmios_version
     }
   }
   spec {
@@ -20,14 +20,16 @@ resource "kubernetes_deployment_v1" "ogmios" {
       match_labels = {
         "demeter.run/instance"               = local.name
         "cardano.demeter.run/network"        = var.network
-        "cardano.demeter.run/ogmios_version" = var.ogmios_version
+        "cardano.demeter.run/ogmios-version" = var.ogmios_version
       }
     }
     template {
       metadata {
         name = local.name
         labels = {
-          "demeter.run/instance" = local.name
+          "demeter.run/instance"               = local.name
+          "cardano.demeter.run/network"        = var.network
+          "cardano.demeter.run/ogmios-version" = var.ogmios_version
         }
       }
       spec {
@@ -110,7 +112,8 @@ resource "kubernetes_deployment_v1" "ogmios" {
         toleration {
           effect   = "NoSchedule"
           key      = "demeter.run/compute-profile"
-          operator = "Exists"
+          operator = "Equal"
+          value    = "general-purpose"
         }
 
         toleration {
