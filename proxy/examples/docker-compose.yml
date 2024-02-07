@@ -1,0 +1,33 @@
+version: "3.8"
+
+networks:
+  proxy-network:
+    driver: bridge
+
+services:
+  proxy:
+    container_name: proxy
+    build: ../
+    networks:
+      - proxy-network
+    ports:
+      - "80:80"
+      - "5000:5000"
+    deploy:
+      restart_policy:
+        condition: any
+    environment:
+      - PROXY_CONFIG_PATH=/opt/proxy/proxy.toml
+    volumes:
+      - ./proxy.toml:/opt/proxy/proxy.toml
+
+  mock_api:
+    container_name: mock_api
+    image: paulobressan/mock-api:1.0.0
+    networks:
+      - proxy-network
+    deploy:
+      restart_policy:
+        condition: any
+    environment:
+      - PORT=80

@@ -1,0 +1,30 @@
+proxy_addr = "0.0.0.0:80"
+prometheus_addr = "0.0.0.0:5000"
+
+[[routes]]
+path = "/headers"
+host = "mock_api"
+port = 80
+protocol = "http"
+
+[[routes]]
+path = "/"
+host = "mock_api"
+port = 80
+protocol = "websocket"
+
+[[http_plugins]]
+type = "AuthDmtrPlugin"
+priority = 1
+
+[[http_plugins]]
+type = "RateLimiterPlugin"
+priority = 2
+
+[[http_plugins]]
+type = "HostKeyHeaderPlugin"
+priority = 0
+
+[[websocket_plugins]]
+type = "RateLimiterPlugin"
+priority = 0
