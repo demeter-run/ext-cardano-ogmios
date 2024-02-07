@@ -1,5 +1,4 @@
 locals {
-  name = "ogmios-${var.network}-${var.ogmios_version}-${var.salt}"
   port = 1337
 }
 
