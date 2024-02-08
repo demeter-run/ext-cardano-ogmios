@@ -2,10 +2,12 @@ use futures_util::{future, stream::TryStreamExt, StreamExt};
 use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::body::Incoming;
 use hyper::client::conn::http1 as http1_client;
-use hyper::header::{HeaderValue, CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE};
+use hyper::header::{
+    HeaderValue, CONNECTION, HOST, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE,
+};
 use hyper::server::conn::http1 as http1_server;
 use hyper::service::service_fn;
-use hyper::{Method, Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -17,38 +19,23 @@ use tokio_tungstenite::{connect_async, WebSocketStream};
 use tracing::{error, info};
 use url::Url;
 
-use crate::config::{Protocol, Route};
-use crate::plugins::{execute_plugins, Plugin, PluginError};
-use crate::utils::{full, ProxyResponse, DMTR_PROJECT_ID};
+use crate::utils::{get_header, Protocol, ProxyResponse, DMTR_API_KEY};
 use crate::State;
 
 pub async fn start(state: Arc<State>) -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from_str(&state.config.proxy_addr)?;
     let listener = TcpListener::bind(addr).await?;
-    info!(addr = state.config.proxy_addr, "proxy listening");
 
-    let (http_plugins, websocket_plugins) = state.config.mount_plugins();
-    let http_plugins = Arc::new(http_plugins);
-    let websocket_plugins = Arc::new(websocket_plugins);
+    info!(addr = state.config.proxy_addr, "proxy listening");
 
     loop {
         let state = state.clone();
-        let http_plugins = http_plugins.clone();
-        let websocket_plugins = websocket_plugins.clone();
-
         let (stream, _) = listener.accept().await?;
 
         tokio::task::spawn(async move {
             let io = TokioIo::new(stream);
 
-            let service = service_fn(move |req| {
-                handle(
-                    req,
-                    state.clone(),
-                    http_plugins.clone(),
-                    websocket_plugins.clone(),
-                )
-            });
+            let service = service_fn(move |req| handle(req, state.clone()));
 
             if let Err(err) = http1_server::Builder::new()
                 .serve_connection(io, service)
@@ -64,52 +51,34 @@ pub async fn start(state: Arc<State>) -> Result<(), Box<dyn std::error::Error>> 
 async fn handle(
     mut req: Request<Incoming>,
     state: Arc<State>,
-    http_plugins: Arc<Vec<Box<dyn Plugin>>>,
-    websocket_plugins: Arc<Vec<Box<dyn Plugin>>>,
 ) -> Result<ProxyResponse, hyper::Error> {
-    if let Some(route) = state.config.match_route(req.uri().path()) {
-        if let Err(err) = execute_plugins(&mut req, &http_plugins) {
-            match err {
-                PluginError::Http(status, body) => {
-                    let mut res = Response::new(body);
-                    *res.status_mut() = status;
-                    return Ok(res);
-                }
-            }
-        }
+    let port_host = get_header(&mut req, HOST.as_str()).unwrap().to_string();
 
-        return match route.protocol {
-            Protocol::Http => handle_http(req, route, state.clone()).await,
-            Protocol::Websocket => {
-                handle_websocket(req, route, state.clone(), websocket_plugins.clone()).await
-            }
-        };
+    let captures = state.tools.host_regex.captures(&port_host).unwrap();
+    let network: &str = captures.get(2).unwrap().into();
+    let version: &str = captures.get(3).unwrap().into();
+    let ogmios_host = format!("ogmios-{network}-{version}:{}", state.config.ogmios_port);
+
+    if let Some(key) = captures.get(1) {
+        req.headers_mut()
+            .insert(DMTR_API_KEY, HeaderValue::from_str(key.as_str()).unwrap());
     }
 
-    let mut res = Response::new(full("Invalid path"));
-    *res.status_mut() = StatusCode::UNPROCESSABLE_ENTITY;
-
-    Ok(res)
+    match Protocol::match_protocol(&mut req) {
+        Protocol::Http => handle_http(req, state, &ogmios_host).await,
+        Protocol::Websocket => handle_websocket(req, state, &ogmios_host).await,
+    }
 }
 
 async fn handle_http(
     req: Request<Incoming>,
-    route: &Route,
     state: Arc<State>,
+    ogmios_host: &str,
 ) -> Result<ProxyResponse, hyper::Error> {
-    let dmtr_project_id = req
-        .headers()
-        .get(DMTR_PROJECT_ID)
-        .map(|k| k.to_str().unwrap_or_default())
-        .unwrap_or_default();
+    state.metrics.count_http_total_request("dmtr_project_id");
 
-    state.metrics.count_http_total_request(dmtr_project_id);
-
-    let stream = TcpStream::connect((route.host.clone(), route.port))
-        .await
-        .unwrap();
-
-    let io = TokioIo::new(stream);
+    let stream = TcpStream::connect(ogmios_host).await.unwrap();
+    let io: TokioIo<TcpStream> = TokioIo::new(stream);
 
     let (mut sender, conn) = http1_client::Builder::new()
         .preserve_header_case(true)
@@ -129,60 +98,26 @@ async fn handle_http(
 
 async fn handle_websocket(
     mut req: Request<Incoming>,
-    route: &Route,
     state: Arc<State>,
-    websocket_plugins: Arc<Vec<Box<dyn Plugin>>>,
+    ogmios_host: &str,
 ) -> Result<ProxyResponse, hyper::Error> {
     let headers = req.headers();
-
-    if req.method() != Method::GET
-        || !headers
-            .get(UPGRADE)
-            .and_then(|h| h.to_str().ok())
-            .map(|h| h.eq_ignore_ascii_case("websocket"))
-            .unwrap_or(false)
-    {
-        let mut res = Response::new(full("Invalid websocket request"));
-        *res.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
-        return Ok(res);
-    }
-
     let upgrade = HeaderValue::from_static("Upgrade");
     let websocket = HeaderValue::from_static("websocket");
-
     let key = headers.get(SEC_WEBSOCKET_KEY);
     let derived = key.map(|k| derive_accept_key(k.as_bytes()));
     let version = req.version();
-
-    let host = route.host.clone();
-    let port = route.port;
-
-    let dmtr_project_id = req
-        .headers()
-        .get(DMTR_PROJECT_ID)
-        .map(|k| k.to_str().unwrap_or_default())
-        .unwrap_or_default()
-        .to_string();
+    let ogmios_host = ogmios_host.to_string();
 
     tokio::task::spawn(async move {
         match hyper::upgrade::on(&mut req).await {
             Ok(upgraded) => {
                 let upgraded = TokioIo::new(upgraded);
-                dbg!(&upgraded);
-
                 let client_stream =
                     WebSocketStream::from_raw_socket(upgraded, Role::Server, None).await;
                 let (client_outgoing, client_incoming) = client_stream.split();
 
-                let url_result = Url::parse(&format!("ws://{}:{}", host, port));
-                if let Err(err) = url_result {
-                    error!(
-                        error = err.to_string(),
-                        "host and port invalid to mount the url on route config"
-                    );
-                    return;
-                }
-                let url = url_result.unwrap();
+                let url = Url::parse(&format!("ws://{ogmios_host}")).unwrap();
 
                 let connection_result = connect_async(url).await;
                 if let Err(err) = connection_result {
@@ -194,8 +129,7 @@ async fn handle_websocket(
 
                 let client_in = client_incoming
                     .inspect_ok(|_| {
-                        let _result = execute_plugins(&mut req, &websocket_plugins);
-                        state.metrics.count_ws_total_frame(&dmtr_project_id);
+                        state.metrics.count_ws_total_frame("");
                     })
                     .forward(host_outgoing);
                 let host_in = host_incoming.forward(client_outgoing);

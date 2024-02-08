@@ -65,7 +65,10 @@ async fn api_get_metrics(state: &State) -> Result<ProxyResponse, hyper::Error> {
     Ok(res)
 }
 
-async fn routes_match(req: Request<Incoming>, state: Arc<State>) -> Result<ProxyResponse, hyper::Error> {
+async fn routes_match(
+    req: Request<Incoming>,
+    state: Arc<State>,
+) -> Result<ProxyResponse, hyper::Error> {
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/metrics") => api_get_metrics(&state).await,
         _ => Ok(Response::builder()
