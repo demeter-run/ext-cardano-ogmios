@@ -13,6 +13,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::RwLock;
 use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
 use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::{connect_async, WebSocketStream};
@@ -22,11 +23,13 @@ use url::Url;
 use crate::utils::{get_header, Protocol, ProxyResponse, DMTR_API_KEY};
 use crate::State;
 
-pub async fn start(state: Arc<State>) -> Result<(), Box<dyn std::error::Error>> {
-    let addr = SocketAddr::from_str(&state.config.proxy_addr)?;
+pub async fn start(state: Arc<RwLock<State>>) -> Result<(), Box<dyn std::error::Error>> {
+    let r_state = state.read().await;
+
+    let addr = SocketAddr::from_str(&r_state.config.proxy_addr)?;
     let listener = TcpListener::bind(addr).await?;
 
-    info!(addr = state.config.proxy_addr, "proxy listening");
+    info!(addr = r_state.config.proxy_addr, "proxy listening");
 
     loop {
         let state = state.clone();
@@ -50,14 +53,16 @@ pub async fn start(state: Arc<State>) -> Result<(), Box<dyn std::error::Error>> 
 
 async fn handle(
     mut req: Request<Incoming>,
-    state: Arc<State>,
+    state: Arc<RwLock<State>>,
 ) -> Result<ProxyResponse, hyper::Error> {
-    let port_host = get_header(&mut req, HOST.as_str()).unwrap().to_string();
+    let r_state = state.read().await;
 
-    let captures = state.tools.host_regex.captures(&port_host).unwrap();
+    let port_host = get_header(&req, HOST.as_str()).unwrap().to_string();
+
+    let captures = r_state.host_regex.captures(&port_host).unwrap();
     let network: &str = captures.get(2).unwrap().into();
     let version: &str = captures.get(3).unwrap().into();
-    let ogmios_host = format!("ogmios-{network}-{version}:{}", state.config.ogmios_port);
+    let ogmios_host = format!("ogmios-{network}-{version}:{}", r_state.config.ogmios_port);
 
     if let Some(key) = captures.get(1) {
         req.headers_mut()
@@ -65,17 +70,19 @@ async fn handle(
     }
 
     match Protocol::match_protocol(&mut req) {
-        Protocol::Http => handle_http(req, state, &ogmios_host).await,
-        Protocol::Websocket => handle_websocket(req, state, &ogmios_host).await,
+        Protocol::Http => handle_http(req, state.clone(), &ogmios_host).await,
+        Protocol::Websocket => handle_websocket(req, state.clone(), &ogmios_host).await,
     }
 }
 
 async fn handle_http(
     req: Request<Incoming>,
-    state: Arc<State>,
+    state: Arc<RwLock<State>>,
     ogmios_host: &str,
 ) -> Result<ProxyResponse, hyper::Error> {
-    state.metrics.count_http_total_request("dmtr_project_id");
+    let r_state = state.read().await;
+
+    r_state.metrics.count_http_total_request("dmtr_project_id");
 
     let stream = TcpStream::connect(ogmios_host).await.unwrap();
     let io: TokioIo<TcpStream> = TokioIo::new(stream);
@@ -98,7 +105,7 @@ async fn handle_http(
 
 async fn handle_websocket(
     mut req: Request<Incoming>,
-    state: Arc<State>,
+    state: Arc<RwLock<State>>,
     ogmios_host: &str,
 ) -> Result<ProxyResponse, hyper::Error> {
     let headers = req.headers();
@@ -112,6 +119,8 @@ async fn handle_websocket(
     tokio::task::spawn(async move {
         match hyper::upgrade::on(&mut req).await {
             Ok(upgraded) => {
+                let r_state = state.read().await;
+
                 let upgraded = TokioIo::new(upgraded);
                 let client_stream =
                     WebSocketStream::from_raw_socket(upgraded, Role::Server, None).await;
@@ -128,7 +137,7 @@ async fn handle_websocket(
 
                 let client_in = client_incoming
                     .inspect_ok(|_| {
-                        state.metrics.count_ws_total_frame("");
+                        r_state.metrics.count_ws_total_frame("");
                     })
                     .forward(host_outgoing);
                 let host_in = host_incoming.forward(client_outgoing);

@@ -13,7 +13,7 @@ pub fn full<T: Into<Bytes>>(chunk: T) -> Body {
         .boxed()
 }
 
-pub fn get_header(req: &mut Request<Incoming>, key: &str) -> Option<String> {
+pub fn get_header(req: &Request<Incoming>, key: &str) -> Option<String> {
     req.headers()
         .get(key)
         .and_then(|h| h.to_str().ok().and_then(|v| Some(v.to_string())))

@@ -5,6 +5,7 @@ use prometheus::Registry;
 use regex::Regex;
 use std::error::Error;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::Level;
 
 mod config;
@@ -18,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
-    let state = Arc::new(State::try_new()?);
+    let state = Arc::new(RwLock::new(State::try_new()?));
 
     let metrics = metrics::start(state.clone());
     let proxy_server = proxy::start(state.clone());
@@ -34,30 +35,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 pub struct State {
     config: Config,
     metrics: Metrics,
-    tools: Tools,
+    host_regex: Regex,
 }
 impl State {
     pub fn try_new() -> Result<Self, Box<dyn Error>> {
         let config = Config::new();
         let metrics = Metrics::try_new(Registry::default())?;
-        let tools = Tools::try_new()?;
+        let host_regex = Regex::new(r"(dmtr_[\w\d-]+)?\.?([\w]+).+-([\w\d]+).+")?;
 
         Ok(Self {
             config,
             metrics,
-            tools,
+            host_regex,
         })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Tools {
-    host_regex: Regex,
-}
-impl Tools {
-    pub fn try_new() -> Result<Self, Box<dyn Error>> {
-        let host_regex = Regex::new(r"(dmtr_[\w\d-]+)?\.?([\w]+).+-([\w\d]+).+")?;
-
-        Ok(Self { host_regex })
     }
 }

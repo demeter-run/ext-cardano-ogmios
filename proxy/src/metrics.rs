@@ -7,6 +7,7 @@ use hyper::{body::Incoming, service::service_fn, Method, Request, Response, Stat
 use hyper_util::rt::TokioIo;
 use prometheus::{opts, Encoder, IntCounterVec, Registry, TextEncoder};
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tracing::{error, info};
 
 use crate::utils::{full, ProxyResponse};
@@ -67,10 +68,12 @@ async fn api_get_metrics(state: &State) -> Result<ProxyResponse, hyper::Error> {
 
 async fn routes_match(
     req: Request<Incoming>,
-    state: Arc<State>,
+    state: Arc<RwLock<State>>,
 ) -> Result<ProxyResponse, hyper::Error> {
+    let r_state = state.read().await;
+
     match (req.method(), req.uri().path()) {
-        (&Method::GET, "/metrics") => api_get_metrics(&state).await,
+        (&Method::GET, "/metrics") => api_get_metrics(&r_state).await,
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(full("Not Found"))
@@ -78,10 +81,11 @@ async fn routes_match(
     }
 }
 
-pub async fn start(state: Arc<State>) -> Result<(), Box<dyn std::error::Error>> {
-    let addr = SocketAddr::from_str(&state.config.prometheus_addr)?;
+pub async fn start(state: Arc<RwLock<State>>) -> Result<(), Box<dyn std::error::Error>> {
+    let r_state = state.read().await;
+    let addr = SocketAddr::from_str(&r_state.config.prometheus_addr)?;
     let listener = TcpListener::bind(addr).await?;
-    info!(addr = state.config.prometheus_addr, "metrics listening");
+    info!(addr = r_state.config.prometheus_addr, "metrics listening");
 
     loop {
         let state = state.clone();
