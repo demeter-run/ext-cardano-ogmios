@@ -117,8 +117,7 @@ async fn handle_websocket(
                     WebSocketStream::from_raw_socket(upgraded, Role::Server, None).await;
                 let (client_outgoing, client_incoming) = client_stream.split();
 
-                let url = Url::parse(&format!("ws://{ogmios_host}")).unwrap();
-
+                let url = Url::parse(&format!("ws://{ogmios_host}{}", req.uri())).unwrap();
                 let connection_result = connect_async(url).await;
                 if let Err(err) = connection_result {
                     error!(error = err.to_string(), "fail to connect to the host");
