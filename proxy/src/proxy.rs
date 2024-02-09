@@ -20,25 +20,41 @@ use tokio_tungstenite::{connect_async, WebSocketStream};
 use tracing::{error, info};
 use url::Url;
 
-use crate::utils::{get_header, Protocol, ProxyResponse, DMTR_API_KEY};
+use crate::utils::{full, get_header, Protocol, ProxyResponse, DMTR_API_KEY};
 use crate::State;
 
-pub async fn start(state: Arc<RwLock<State>>) -> Result<(), Box<dyn std::error::Error>> {
-    let r_state = state.read().await;
+pub async fn start(rw_state: Arc<RwLock<State>>) {
+    let state = rw_state.read().await.clone();
 
-    let addr = SocketAddr::from_str(&r_state.config.proxy_addr)?;
-    let listener = TcpListener::bind(addr).await?;
+    let addr_result = SocketAddr::from_str(&state.config.proxy_addr);
+    if let Err(err) = addr_result {
+        error!(error = err.to_string(), "invalid proxy addr");
+        std::process::exit(1);
+    }
+    let addr = addr_result.unwrap();
 
-    info!(addr = r_state.config.proxy_addr, "proxy listening");
+    let listener_result = TcpListener::bind(addr).await;
+    if let Err(err) = listener_result {
+        error!(error = err.to_string(), "fail to bind tcp server listener");
+        std::process::exit(1);
+    }
+    let listener = listener_result.unwrap();
+
+    info!(addr = state.config.proxy_addr, "proxy listening");
 
     loop {
-        let state = state.clone();
-        let (stream, _) = listener.accept().await?;
+        let rw_state = rw_state.clone();
+        let accept_result = listener.accept().await;
+        if let Err(err) = accept_result {
+            error!(error = err.to_string(), "fail to accept client");
+            continue;
+        }
+        let (stream, _) = accept_result.unwrap();
 
         tokio::task::spawn(async move {
             let io = TokioIo::new(stream);
 
-            let service = service_fn(move |req| handle(req, state.clone()));
+            let service = service_fn(move |req| handle(req, rw_state.clone()));
 
             if let Err(err) = http1_server::Builder::new()
                 .serve_connection(io, service)
@@ -53,36 +69,47 @@ pub async fn start(state: Arc<RwLock<State>>) -> Result<(), Box<dyn std::error::
 
 async fn handle(
     mut req: Request<Incoming>,
-    state: Arc<RwLock<State>>,
+    rw_state: Arc<RwLock<State>>,
 ) -> Result<ProxyResponse, hyper::Error> {
-    let r_state = state.read().await;
+    let state = rw_state.read().await.clone();
 
     let port_host = get_header(&req, HOST.as_str()).unwrap().to_string();
 
-    let captures = r_state.host_regex.captures(&port_host).unwrap();
+    let captures = state.host_regex.captures(&port_host).unwrap();
     let network: &str = captures.get(2).unwrap().into();
     let version: &str = captures.get(3).unwrap().into();
-    let ogmios_host = format!("ogmios-{network}-{version}:{}", r_state.config.ogmios_port);
+    let ogmios_host = format!("ogmios-{network}-{version}:{}", state.config.ogmios_port);
 
     if let Some(key) = captures.get(1) {
         req.headers_mut()
             .insert(DMTR_API_KEY, HeaderValue::from_str(key.as_str()).unwrap());
     }
 
+    let token = get_header(&req, DMTR_API_KEY).unwrap_or_default();
+    let consumer = state.get_auth_token(network, version, &token);
+    if consumer.is_none() {
+        return Ok(Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body(full("Unauthorized"))
+            .unwrap());
+    }
+
+    dbg!(consumer.unwrap().namespace);
+
     match Protocol::match_protocol(&mut req) {
-        Protocol::Http => handle_http(req, state.clone(), &ogmios_host).await,
-        Protocol::Websocket => handle_websocket(req, state.clone(), &ogmios_host).await,
+        Protocol::Http => handle_http(req, rw_state.clone(), &ogmios_host).await,
+        Protocol::Websocket => handle_websocket(req, rw_state.clone(), &ogmios_host).await,
     }
 }
 
 async fn handle_http(
     req: Request<Incoming>,
-    state: Arc<RwLock<State>>,
+    rw_state: Arc<RwLock<State>>,
     ogmios_host: &str,
 ) -> Result<ProxyResponse, hyper::Error> {
-    let r_state = state.read().await;
+    let state = rw_state.read().await.clone();
 
-    r_state.metrics.count_http_total_request("dmtr_project_id");
+    state.metrics.count_http_total_request("dmtr_project_id");
 
     let stream = TcpStream::connect(ogmios_host).await.unwrap();
     let io: TokioIo<TcpStream> = TokioIo::new(stream);
@@ -105,7 +132,7 @@ async fn handle_http(
 
 async fn handle_websocket(
     mut req: Request<Incoming>,
-    state: Arc<RwLock<State>>,
+    rw_state: Arc<RwLock<State>>,
     ogmios_host: &str,
 ) -> Result<ProxyResponse, hyper::Error> {
     let headers = req.headers();
@@ -119,7 +146,7 @@ async fn handle_websocket(
     tokio::task::spawn(async move {
         match hyper::upgrade::on(&mut req).await {
             Ok(upgraded) => {
-                let r_state = state.read().await;
+                let state = rw_state.read().await.clone();
 
                 let upgraded = TokioIo::new(upgraded);
                 let client_stream =
@@ -137,7 +164,7 @@ async fn handle_websocket(
 
                 let client_in = client_incoming
                     .inspect_ok(|_| {
-                        r_state.metrics.count_ws_total_frame("");
+                        state.metrics.count_ws_total_frame("");
                     })
                     .forward(host_outgoing);
                 let host_in = host_incoming.forward(client_outgoing);
