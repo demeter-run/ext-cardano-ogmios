@@ -5,6 +5,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub use kube;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Kube Error: {0}")]
