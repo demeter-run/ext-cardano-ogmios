@@ -17,6 +17,7 @@ use crate::State;
 pub struct Metrics {
     registry: Registry,
     pub ws_total_frame: IntCounterVec,
+    pub ws_total_connection: IntCounterVec,
     pub http_total_request: IntCounterVec,
 }
 
@@ -24,21 +25,30 @@ impl Metrics {
     pub fn try_new(registry: Registry) -> Result<Self, Box<dyn Error>> {
         let ws_total_frame = IntCounterVec::new(
             opts!("proxy_ws_total_frame", "total of websocket frame",),
-            &["dmtr_key"],
+            &["namespace"],
         )
         .unwrap();
+
+        let ws_total_connection = IntCounterVec::new(
+            opts!("proxy_ws_total_connection", "total of websocket connection",),
+            &["namespace"],
+        )
+        .unwrap();
+
         let http_total_request = IntCounterVec::new(
             opts!("proxy_http_total_request", "total of http request",),
-            &["dmtr_key"],
+            &["namespace"],
         )
         .unwrap();
 
         registry.register(Box::new(ws_total_frame.clone()))?;
+        registry.register(Box::new(ws_total_connection.clone()))?;
         registry.register(Box::new(http_total_request.clone()))?;
 
         Ok(Metrics {
             registry,
             ws_total_frame,
+            ws_total_connection,
             http_total_request,
         })
     }
@@ -47,12 +57,16 @@ impl Metrics {
         self.registry.gather()
     }
 
-    pub fn count_ws_total_frame(&self, dmtr_key: &str) {
-        self.ws_total_frame.with_label_values(&[dmtr_key]).inc()
+    pub fn count_ws_total_frame(&self, namespace: &str) {
+        self.ws_total_frame.with_label_values(&[namespace]).inc()
     }
 
-    pub fn count_http_total_request(&self, dmtr_key: &str) {
-        self.http_total_request.with_label_values(&[dmtr_key]).inc()
+    pub fn count_http_total_request(&self, namespace: &str) {
+        self.http_total_request.with_label_values(&[namespace]).inc()
+    }
+
+    pub fn count_ws_total_connection(&self, namespace: &str) {
+        self.ws_total_connection.with_label_values(&[namespace]).inc()
     }
 }
 
