@@ -12,7 +12,7 @@ impl Default for Metrics {
     fn default() -> Self {
         let reconcile_failures = IntCounterVec::new(
             opts!(
-                "crd_controller_reconciliation_errors_total",
+                "ogmios_operator_reconciliation_errors_total",
                 "reconciliation errors",
             ),
             &["instance", "error"],
