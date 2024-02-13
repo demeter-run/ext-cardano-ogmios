@@ -9,6 +9,7 @@ use hyper::server::conn::http1 as http1_server;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -68,11 +69,11 @@ pub async fn start(rw_state: Arc<RwLock<State>>) {
 }
 
 async fn handle(
-    req: Request<Incoming>,
+    mut hyper_req: Request<Incoming>,
     rw_state: Arc<RwLock<State>>,
 ) -> Result<ProxyResponse, hyper::Error> {
     let state = rw_state.read().await.clone();
-    let proxy_req = ProxyRequest::new(req, &state);
+    let proxy_req = ProxyRequest::new(&mut hyper_req, &state);
 
     if proxy_req.consumer.is_none() {
         return Ok(Response::builder()
@@ -81,17 +82,28 @@ async fn handle(
             .unwrap());
     }
 
-    let namespace = &proxy_req.consumer.as_ref().unwrap().namespace;
-    state.metrics.count_http_total_request(namespace);
+    let response_result = match proxy_req.protocol {
+        Protocol::Http => handle_http(hyper_req, &proxy_req).await,
+        Protocol::Websocket => handle_websocket(hyper_req, &proxy_req, rw_state).await,
+    };
 
-    match proxy_req.protocol {
-        Protocol::Http => handle_http(proxy_req).await,
-        Protocol::Websocket => handle_websocket(proxy_req, rw_state).await,
-    }
+    match &response_result {
+        Ok(response) => {
+            state
+                .metrics
+                .count_http_total_request(&proxy_req, response.status());
+        }
+        Err(_) => todo!("send error to prometheus"),
+    };
+
+    response_result
 }
 
-async fn handle_http(proxy_req: ProxyRequest) -> Result<ProxyResponse, hyper::Error> {
-    let stream = TcpStream::connect(proxy_req.instance_host).await.unwrap();
+async fn handle_http(
+    hyper_req: Request<Incoming>,
+    proxy_req: &ProxyRequest,
+) -> Result<ProxyResponse, hyper::Error> {
+    let stream = TcpStream::connect(&proxy_req.instance).await.unwrap();
     let io: TokioIo<TcpStream> = TokioIo::new(stream);
 
     let (mut sender, conn) = http1_client::Builder::new()
@@ -106,39 +118,34 @@ async fn handle_http(proxy_req: ProxyRequest) -> Result<ProxyResponse, hyper::Er
         }
     });
 
-    let resp = sender.send_request(proxy_req.hyper_req).await?;
+    let resp = sender.send_request(hyper_req).await?;
     Ok(resp.map(|b| b.boxed()))
 }
 
 async fn handle_websocket(
-    mut proxy_req: ProxyRequest,
+    mut hyper_req: Request<Incoming>,
+    proxy_req: &ProxyRequest,
     rw_state: Arc<RwLock<State>>,
 ) -> Result<ProxyResponse, hyper::Error> {
-    let headers = proxy_req.hyper_req.headers();
+    let headers = hyper_req.headers();
     let upgrade = HeaderValue::from_static("Upgrade");
     let websocket = HeaderValue::from_static("websocket");
     let key = headers.get(SEC_WEBSOCKET_KEY);
     let derived = key.map(|k| derive_accept_key(k.as_bytes()));
-    let version = proxy_req.hyper_req.version();
-    let instance_host = proxy_req.instance_host.to_string();
-    let namespace = proxy_req.consumer.unwrap().namespace;
+    let version = hyper_req.version();
 
+    let proxy_req = proxy_req.clone();
     let state = rw_state.read().await.clone();
-    state.metrics.count_ws_total_connection(&namespace);
-
     tokio::task::spawn(async move {
-        match hyper::upgrade::on(&mut proxy_req.hyper_req).await {
+        match hyper::upgrade::on(&mut hyper_req).await {
             Ok(upgraded) => {
                 let upgraded = TokioIo::new(upgraded);
                 let client_stream =
                     WebSocketStream::from_raw_socket(upgraded, Role::Server, None).await;
                 let (client_outgoing, client_incoming) = client_stream.split();
 
-                let url = Url::parse(&format!(
-                    "ws://{instance_host}{}",
-                    proxy_req.hyper_req.uri()
-                ))
-                .unwrap();
+                let url =
+                    Url::parse(&format!("ws://{}{}", proxy_req.instance, hyper_req.uri())).unwrap();
                 let connection_result = connect_async(url).await;
                 if let Err(err) = connection_result {
                     error!(error = err.to_string(), "fail to connect to the host");
@@ -149,10 +156,12 @@ async fn handle_websocket(
 
                 let client_in = client_incoming
                     .inspect_ok(|_| {
-                        state.metrics.count_ws_total_frame(&namespace);
+                        state.metrics.count_ws_total_frame(&proxy_req);
                     })
                     .forward(host_outgoing);
                 let host_in = host_incoming.forward(client_outgoing);
+
+                state.metrics.count_ws_total_connection(&proxy_req);
 
                 future::select(client_in, host_in).await;
             }
@@ -173,29 +182,41 @@ async fn handle_websocket(
     Ok(res)
 }
 
-#[derive(Debug)]
-enum Protocol {
+#[derive(Debug, Clone)]
+pub enum Protocol {
     Http,
     Websocket,
 }
+impl Display for Protocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Protocol::Http => write!(f, "http"),
+            Protocol::Websocket => write!(f, "websocket"),
+        }
+    }
+}
 
-#[derive(Debug)]
-struct ProxyRequest {
-    hyper_req: Request<Incoming>,
-    instance_host: String,
-    consumer: Option<Consumer>,
-    protocol: Protocol,
+#[derive(Debug, Clone)]
+pub struct ProxyRequest {
+    pub namespace: String,
+    pub host: String,
+    pub instance: String,
+    pub consumer: Option<Consumer>,
+    pub protocol: Protocol,
 }
 impl ProxyRequest {
-    pub fn new(hyper_req: Request<Incoming>, state: &State) -> Self {
-        let port_host = get_header(&hyper_req, HOST.as_str()).unwrap().to_string();
-        let captures = state.host_regex.captures(&port_host).unwrap();
+    pub fn new(hyper_req: &mut Request<Incoming>, state: &State) -> Self {
+        let mut host = get_header(hyper_req, HOST.as_str()).unwrap();
+        let host_regex = host.clone();
+
+        let captures = state.host_regex.captures(&host_regex).unwrap();
         let network = captures.get(2).unwrap().as_str().to_string();
         let version = captures.get(3).unwrap().as_str().to_string();
 
-        let instance_host = format!("ogmios-{network}-{version}:{}", state.config.ogmios_port);
+        let instance = format!("ogmios-{network}-{version}:{}", state.config.ogmios_port);
+        let namespace = state.config.proxy_namespace.clone();
 
-        let protocol = get_header(&hyper_req, UPGRADE.as_str())
+        let protocol = get_header(hyper_req, UPGRADE.as_str())
             .map(|h| {
                 if h.eq_ignore_ascii_case("websocket") {
                     return Protocol::Websocket;
@@ -205,23 +226,23 @@ impl ProxyRequest {
             })
             .unwrap_or(Protocol::Http);
 
-        let mut proxy_req = Self {
-            hyper_req,
-            instance_host,
-            consumer: None,
-            protocol,
-        };
-
         if let Some(key) = captures.get(1) {
-            proxy_req
-                .hyper_req
+            let key = key.as_str();
+            hyper_req
                 .headers_mut()
-                .insert(DMTR_API_KEY, HeaderValue::from_str(key.as_str()).unwrap());
+                .insert(DMTR_API_KEY, HeaderValue::from_str(key).unwrap());
+            host = host.replace(&format!("{key}."), "");
         }
 
-        let token = get_header(&proxy_req.hyper_req, DMTR_API_KEY).unwrap_or_default();
-        proxy_req.consumer = state.get_auth_token(&network, &version, &token);
+        let token = get_header(hyper_req, DMTR_API_KEY).unwrap_or_default();
+        let consumer = state.get_auth_token(&network, &version, &token);
 
-        proxy_req
+        Self {
+            namespace,
+            instance,
+            consumer,
+            protocol,
+            host,
+        }
     }
 }

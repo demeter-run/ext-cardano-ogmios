@@ -1,11 +1,13 @@
 use config::Config;
 use dotenv::dotenv;
 use metrics::Metrics;
+use operator::kube::ResourceExt;
 use operator::OgmiosPort;
 use prometheus::Registry;
 use regex::Regex;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Display;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::Level;
@@ -33,9 +35,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Consumer {
     namespace: String,
+    port_name: String,
+}
+impl Consumer {
+    pub fn new(namespace: String, port_name: String) -> Self {
+        Self {
+            namespace,
+            port_name,
+        }
+    }
+}
+impl Display for Consumer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.namespace, self.port_name)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -66,9 +82,10 @@ impl State {
             let version = crd.spec.version;
             let auth_token = crd.status.as_ref().unwrap().auth_token.clone();
             let namespace = crd.metadata.namespace.as_ref().unwrap().clone();
+            let port_name = crd.name_any();
 
             let hash_key = format!("{}.{}.{}", network, version, auth_token);
-            let consumer = Consumer { namespace };
+            let consumer = Consumer::new(namespace, port_name);
 
             self.consumers.insert(hash_key, consumer);
         }
