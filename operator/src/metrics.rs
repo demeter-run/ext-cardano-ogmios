@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use kube::ResourceExt;
 use prometheus::{opts, IntCounterVec, Registry};
+use tracing::{info, instrument};
 
-use crate::{Error, OgmiosPort};
+use crate::{Error, OgmiosPort, State};
 
 #[derive(Clone)]
 pub struct Metrics {
@@ -36,3 +39,11 @@ impl Metrics {
             .inc()
     }
 }
+
+#[instrument("metrics collector run", skip_all)]
+pub async fn run_metrics_collector(_state: Arc<State>) {
+    tokio::spawn(async move {
+        info!("collecting metrics running");
+    });
+}
+
