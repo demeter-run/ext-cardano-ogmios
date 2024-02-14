@@ -25,19 +25,22 @@ pub struct Metrics {
 impl Metrics {
     pub fn try_new(registry: Registry) -> Result<Self, Box<dyn Error>> {
         let ws_total_frame = IntCounterVec::new(
-            opts!("proxy_ws_total_frame", "total of websocket frame",),
+            opts!("ogmios_proxy_ws_total_frame", "total of websocket frame",),
             &["namespace", "instance", "route", "consumer"],
         )
         .unwrap();
 
         let ws_total_connection = IntCounterVec::new(
-            opts!("proxy_ws_total_connection", "total of websocket connection",),
+            opts!(
+                "ogmios_proxy_ws_total_connection",
+                "total of websocket connection",
+            ),
             &["namespace", "instance", "route", "consumer"],
         )
         .unwrap();
 
         let http_total_request = IntCounterVec::new(
-            opts!("proxy_http_total_request", "total of http request",),
+            opts!("ogmios_proxy_http_total_request", "total of http request",),
             &[
                 "namespace",
                 "instance",
