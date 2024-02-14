@@ -28,7 +28,7 @@ async fn main() -> io::Result<()> {
 
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
-    let state = Arc::new(State::default());
+    let state = Arc::new(State::new());
 
     let controller = controller::run(state.clone());
     let metrics_collector = metrics_collector::run_metrics_collector(state.clone());

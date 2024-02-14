@@ -23,6 +23,12 @@ pub enum Error {
 
     #[error("Parse Int error: {0}")]
     ParseIntError(#[source] std::num::ParseIntError),
+
+    #[error("Http Request error: {0}")]
+    HttpError(String),
+
+    #[error("Config Error: {0}")]
+    ConfigError(String),
 }
 impl Error {
     pub fn metric_label(&self) -> String {
