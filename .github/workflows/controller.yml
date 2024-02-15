@@ -7,16 +7,16 @@ on:
     paths:
       - ".github/workflows/controller.yml"
       - "operator/**"
-      
+
 jobs:
   build-images:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - context: operator
-            file: operator/Dockerfile
-            endpoint: demeter-run/ext-cardano-ogmios
+          - context: .
+            file: docker/dockerfile.operator
+            endpoint: demeter-run/ext-cardano-ogmios-operator
 
     continue-on-error: true
     runs-on: ubuntu-latest
