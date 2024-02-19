@@ -27,13 +27,13 @@ pub async fn patch_resource_status(
     Ok(())
 }
 
-pub fn build_hostname(network: &Network, key: &str) -> (String, String) {
+pub fn build_hostname(network: &Network, version: &u8, key: &str) -> (String, String) {
     let config = get_config();
     let ingress_class = &config.ingress_class;
     let dns_zone = &config.dns_zone;
 
-    let hostname = format!("{network}.{ingress_class}.{dns_zone}");
-    let hostname_key = format!("{key}.{network}.{ingress_class}.{dns_zone}");
+    let hostname = format!("{network}-{version}.{ingress_class}.{dns_zone}");
+    let hostname_key = format!("{key}.{network}-{version}.{ingress_class}.{dns_zone}");
 
     (hostname, hostname_key)
 }

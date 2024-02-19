@@ -57,7 +57,7 @@ impl Context {
 async fn reconcile(crd: Arc<OgmiosPort>, ctx: Arc<Context>) -> Result<Action> {
     let key = build_api_key(&crd).await?;
 
-    let (hostname, hostname_key) = build_hostname(&crd.spec.network, &key);
+    let (hostname, hostname_key) = build_hostname(&crd.spec.network, &crd.spec.version, &key);
 
     let status = OgmiosPortStatus {
         endpoint_url: format!("https://{hostname}",),
