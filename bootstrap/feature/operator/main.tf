@@ -37,19 +37,14 @@ variable "dcu_per_frame" {
   }
 }
 
-variable "prometheus_host" {
-  type    = string
-  default = ""
-}
-
 variable "metrics_delay" {
   type    = number
   default = 30
 }
 
 variable "prometheus_url" {
-  type    = number
-  default = 30
+  type    = string
+  default = "http://prometheus-operated.demeter-system.svc.cluster.local:9090/api/v1"
 }
 
 variable "replicas" {
