@@ -3,7 +3,7 @@
 ~/go/bin/kind create cluster
 
 echo "Building operator CRD"
-cargo run --bin=crdgen >> env-crd.yaml --manifest-path ../../operator/Cargo.toml
+cargo run --bin=crdgen > env-crd.yaml --manifest-path ../../operator/Cargo.toml
 
 kubectl apply -f env-crd.yaml
 
