@@ -5,16 +5,20 @@ use hyper::client::conn::http1 as http1_client;
 use hyper::header::{
     HeaderValue, CONNECTION, HOST, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE,
 };
-use hyper::server::conn::http1 as http1_server;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder;
+use rustls::ServerConfig;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{fs, io};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
+use tokio_rustls::TlsAcceptor;
 use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
 use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::{connect_async, WebSocketStream};
@@ -26,6 +30,31 @@ use crate::{Consumer, State};
 
 pub async fn start(rw_state: Arc<RwLock<State>>) {
     let state = rw_state.read().await.clone();
+
+    let certs_result =
+        load_certs("/home/paulo/projects/txpipe/ext-cardano-ogmios/proxy/cert/localhost.crt");
+    if let Err(err) = certs_result {
+        error!(error = err.to_string(), "fail to load cert");
+        std::process::exit(1);
+    }
+    let certs = certs_result.unwrap();
+
+    let key_result =
+        load_private_key("/home/paulo/projects/txpipe/ext-cardano-ogmios/proxy/cert/localhost.key");
+    if let Err(err) = key_result {
+        error!(error = err.to_string(), "fail to load cert key");
+        std::process::exit(1);
+    }
+    let key = key_result.unwrap();
+
+    let server_config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .unwrap();
+
+    // server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+
+    let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
 
     let addr_result = SocketAddr::from_str(&state.config.proxy_addr);
     if let Err(err) = addr_result {
@@ -52,14 +81,23 @@ pub async fn start(rw_state: Arc<RwLock<State>>) {
         }
         let (stream, _) = accept_result.unwrap();
 
-        tokio::task::spawn(async move {
-            let io = TokioIo::new(stream);
+        let tls_acceptor = tls_acceptor.clone();
+
+        tokio::spawn(async move {
+            let tls_stream = match tls_acceptor.accept(stream).await {
+                Ok(tls_stream) => tls_stream,
+                Err(err) => {
+                    error!(error = err.to_string(), "failed to perform tls handshake");
+                    return;
+                }
+            };
+
+            let io = TokioIo::new(tls_stream);
 
             let service = service_fn(move |req| handle(req, rw_state.clone()));
 
-            if let Err(err) = http1_server::Builder::new()
+            if let Err(err) = Builder::new(TokioExecutor::new())
                 .serve_connection(io, service)
-                .with_upgrades()
                 .await
             {
                 error!(error = err.to_string(), "failed proxy server connection");
@@ -245,4 +283,16 @@ impl ProxyRequest {
             host,
         }
     }
+}
+
+fn load_certs(filename: &str) -> io::Result<Vec<CertificateDer<'static>>> {
+    let cert_file = fs::File::open(filename)?;
+    let mut reader = io::BufReader::new(cert_file);
+    rustls_pemfile::certs(&mut reader).collect()
+}
+
+fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
+    let key_file = fs::File::open(filename)?;
+    let mut reader = io::BufReader::new(key_file);
+    rustls_pemfile::private_key(&mut reader).map(|key| key.unwrap())
 }
