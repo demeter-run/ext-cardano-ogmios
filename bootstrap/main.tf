@@ -13,12 +13,6 @@ resource "kubernetes_namespace" "namespace" {
   }
 }
 
-moved {
-  from = module.ogmios_v1_feature.kubernetes_namespace.namespace
-  to   = kubernetes_namespace.namespace
-}
-
-
 module "ogmios_v1_feature" {
   depends_on         = [kubernetes_namespace.namespace]
   source             = "./feature"
