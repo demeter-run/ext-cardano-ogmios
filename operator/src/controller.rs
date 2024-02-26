@@ -35,6 +35,8 @@ pub static OGMIOS_PORT_FINALIZER: &str = "ogmiosports.demeter.run";
 pub struct OgmiosPortSpec {
     pub network: Network,
     pub version: u8,
+    // throughput should be 0, 1, 2
+    pub throughput_tier: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default, Debug, JsonSchema)]
@@ -43,8 +45,6 @@ pub struct OgmiosPortStatus {
     pub endpoint_url: String,
     pub authenticated_endpoint_url: String,
     pub auth_token: String,
-    // throughput should be 0, 1, 2
-    pub throughput_tier: String,
 }
 
 struct Context {
