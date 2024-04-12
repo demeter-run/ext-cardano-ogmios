@@ -31,8 +31,8 @@ module "ogmios_v1_proxy" {
   replicas        = var.proxy_blue_replicas
   proxy_image_tag = var.proxy_blue_image_tag
   extension_name  = var.extension_name
-  networks  = ["mainnet", "preprod", "preview"]
-  name = "proxy"
+  networks        = ["mainnet", "preprod", "preview"]
+  name            = "proxy"
 }
 
 module "ogmios_v1_proxy_green" {
@@ -42,9 +42,9 @@ module "ogmios_v1_proxy_green" {
   replicas        = var.proxy_green_replicas
   proxy_image_tag = var.proxy_green_image_tag
   extension_name  = var.extension_name
-  networks  = ["mainnet", "preprod", "preview", "vector-testnet"]
+  networks        = ["mainnet", "preprod", "preview", "vector-testnet"]
   environment     = "green"
-  name = "proxy-green"
+  name            = "proxy-green"
 }
 
 // mainnet

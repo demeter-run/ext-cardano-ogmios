@@ -11,7 +11,7 @@ locals {
 }
 
 variable "name" {
-  type = string
+  type    = string
   default = "proxy"
 }
 
@@ -67,12 +67,12 @@ variable "extension_name" {
 }
 
 variable "networks" {
-  type = list(string)
+  type    = list(string)
   default = ["mainnet", "preprod", "preview", "vector-testnet"]
 }
 
 variable "versions" {
-  type = list(string)
+  type    = list(string)
   default = ["5", "6"]
 }
 

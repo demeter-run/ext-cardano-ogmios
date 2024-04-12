@@ -8,7 +8,7 @@ locals {
   ])
 
   # Add the extra URL to the list of generated URLs
-  dns_names = concat(local.by_network, ["*.${var.extension_name}.${var.dns_zone}"])
+  dns_names        = concat(local.by_network, ["*.${var.extension_name}.${var.dns_zone}"])
   cert_secret_name = var.environment != null ? "${var.extension_name}-${var.environment}-wildcard-tls" : "${var.extension_name}-wildcard-tls"
 }
 
