@@ -31,10 +31,6 @@ async fn add_limiter(state: &State, consumer: &Consumer, tier: &Tier) {
 }
 
 pub async fn limiter(state: Arc<State>, consumer: &Consumer) {
-    if !state.config.enable_rate_limit {
-        return;
-    }
-
     let tiers = state.tiers.read().await.clone();
     let tier = tiers.get(&consumer.tier).unwrap();
 

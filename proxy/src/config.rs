@@ -11,7 +11,6 @@ pub struct Config {
     pub ogmios_dns: String,
     pub ssl_crt_path: PathBuf,
     pub ssl_key_path: PathBuf,
-    pub enable_rate_limit: bool,
 }
 
 impl Config {
@@ -42,9 +41,6 @@ impl Config {
                 .parse()
                 .expect("OGMIOS_PORT must a number"),
             ogmios_dns: env::var("OGMIOS_DNS").expect("OGMIOS_DNS must be set"),
-            enable_rate_limit: env::var("ENABLE_RATE_LIMIT")
-                .map(|e| e.parse().expect("ENABLE_RATE_LIMIT must be a bool"))
-                .unwrap_or(true),
         }
     }
 }

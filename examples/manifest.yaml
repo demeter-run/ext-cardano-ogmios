@@ -255,8 +255,6 @@ spec:
               value: "/ogmios-proxy/localhost.key"
             - name: PROXY_TIERS_PATH
               value: "/ogmios-proxy/tiers.toml"
-            - name: ENABLE_RATE_LIMIT
-              value: "false"
           volumeMounts:
             - name: proxy-vol
               mountPath: /ogmios-proxy
