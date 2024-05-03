@@ -205,8 +205,8 @@ data:
     [[tiers]]
     name = "0"
     [[tiers.rates]]
-    interval = "1s"
-    limit = 10
+    interval = "1m"
+    limit = 1
 
     [[tiers]]
     name = "1"
@@ -247,12 +247,16 @@ spec:
               value: "0.0.0.0:9187"
             - name: OGMIOS_PORT
               value: "80"
+            - name: OGMIOS_DNS
+              value: "prj-mainnet-test.svc.cluster.local"
             - name: SSL_CRT_PATH
               value: "/ogmios-proxy/localhost.crt"
             - name: SSL_KEY_PATH
               value: "/ogmios-proxy/localhost.key"
             - name: PROXY_TIERS_PATH
               value: "/ogmios-proxy/tiers.toml"
+            - name: ENABLE_RATE_LIMIT
+              value: "false"
           volumeMounts:
             - name: proxy-vol
               mountPath: /ogmios-proxy
