@@ -32,7 +32,7 @@ use url::Url;
 
 use crate::limiter::limiter;
 use crate::utils::{full, get_header, ProxyResponse, DMTR_API_KEY};
-use crate::State;
+use crate::{Consumer, State};
 
 pub async fn start(state: Arc<State>) {
     let addr_result = SocketAddr::from_str(&state.config.proxy_addr);
@@ -108,7 +108,7 @@ async fn handle(
             }
 
             let proxy_req = proxy_req_result.unwrap();
-            if proxy_req.consumer_key.is_none() {
+            if proxy_req.consumer.is_none() {
                 return Ok(Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .body(full("Unauthorized"))
@@ -200,7 +200,7 @@ async fn handle_websocket(
                         match result {
                             Ok(data) => {
                                 if let Err(err) =
-                                    limiter(state.clone(), proxy_req.consumer_key.clone().unwrap())
+                                    limiter(state.clone(), proxy_req.consumer.clone().unwrap().key)
                                         .await
                                 {
                                     error!(error = err.to_string(), "Failed to run limiter");
@@ -274,7 +274,7 @@ pub struct ProxyRequest {
     pub namespace: String,
     pub host: String,
     pub instance: String,
-    pub consumer_key: Option<String>,
+    pub consumer: Option<Consumer>,
     pub protocol: Protocol,
 }
 impl ProxyRequest {
@@ -317,7 +317,7 @@ impl ProxyRequest {
         Some(Self {
             namespace,
             instance,
-            consumer_key: consumer.map(|x| x.key),
+            consumer,
             protocol,
             host,
         })
