@@ -47,6 +47,7 @@ pub fn start(state: Arc<State>) {
                     Some(_) => {
                         info!("auth: Adding new consumer: {}", crd.name_any());
                         let consumer = Consumer::from(&crd);
+                        state.limiter.write().await.remove(&consumer.key);
                         state
                             .consumers
                             .write()
