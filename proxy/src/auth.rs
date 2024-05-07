@@ -37,6 +37,10 @@ pub fn start(state: Arc<State>) {
                         })
                         .collect();
                     *state.consumers.write().await = consumers;
+
+                    // When the watcher is restarted, we reset the limiter because a user
+                    // could have changed the tier on the watcher restart.
+                    state.limiter.write().await.clear();
                 }
                 // New port created or updated.
                 Ok(Some(Event::Applied(crd))) => match crd.status {
