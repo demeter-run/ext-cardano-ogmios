@@ -32,7 +32,7 @@ use url::Url;
 
 use crate::limiter::limiter;
 use crate::utils::{full, get_header, ProxyResponse, DMTR_API_KEY};
-use crate::{Consumer, State};
+use crate::State;
 
 pub async fn start(state: Arc<State>) {
     let addr_result = SocketAddr::from_str(&state.config.proxy_addr);
@@ -108,7 +108,7 @@ async fn handle(
             }
 
             let proxy_req = proxy_req_result.unwrap();
-            if proxy_req.consumer.is_none() {
+            if proxy_req.consumer_key.is_none() {
                 return Ok(Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .body(full("Unauthorized"))
@@ -199,7 +199,13 @@ async fn handle_websocket(
                     while let Some(result) = client_incoming.next().await {
                         match result {
                             Ok(data) => {
-                                limiter(state.clone(), proxy_req.consumer.as_ref().unwrap()).await;
+                                if let Err(err) =
+                                    limiter(state.clone(), proxy_req.consumer_key.clone().unwrap())
+                                        .await
+                                {
+                                    error!(error = err.to_string(), "Failed to run limiter");
+                                    break;
+                                };
                                 if let Err(err) = instance_outgoing.send(data).await {
                                     error!(
                                         error = err.to_string(),
@@ -268,7 +274,7 @@ pub struct ProxyRequest {
     pub namespace: String,
     pub host: String,
     pub instance: String,
-    pub consumer: Option<Consumer>,
+    pub consumer_key: Option<String>,
     pub protocol: Protocol,
 }
 impl ProxyRequest {
@@ -311,7 +317,7 @@ impl ProxyRequest {
         Some(Self {
             namespace,
             instance,
-            consumer,
+            consumer_key: consumer.map(|x| x.key),
             protocol,
             host,
         })
