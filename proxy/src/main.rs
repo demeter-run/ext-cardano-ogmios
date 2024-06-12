@@ -81,14 +81,6 @@ pub struct Consumer {
     network: String,
     version: String,
 }
-impl Consumer {
-    pub fn instance(&self, state: State) -> String {
-        format!(
-            "ogmios-{}-{}.{}:{}",
-            self.network, self.version, state.config.ogmios_dns, state.config.ogmios_port
-        )
-    }
-}
 impl Display for Consumer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.namespace, self.port_name)
