@@ -32,7 +32,7 @@ locals {
     },
     {
       "name"            = "3",
-      "max_connections" = 75
+      "max_connections" = 250
       "rates" = [
         {
           "interval" = "1m",
