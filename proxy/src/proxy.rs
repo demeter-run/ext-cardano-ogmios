@@ -224,7 +224,7 @@ async fn handle_websocket(
                             Ok(data) => {
                                 if let Err(err) = limiter(state.clone(), &proxy_req.consumer).await
                                 {
-                                    error!(error = err.to_string(), "Limiter returned an error.");
+                                    error!(error = err.to_string(), "Failed to run limiter.");
                                     break;
                                 };
                                 if let Err(err) = instance_outgoing.send(data).await {
