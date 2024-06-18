@@ -114,22 +114,24 @@ async fn handle(
                     // Before handling the websocket connection, check if consumer has available
                     // connections.
                     let tiers = state.tiers.read().await.clone();
-                    let tier = match tiers.get(&proxy_req.consumer.tier) {
-                        Some(tier) => tier,
-                        None => return Ok(Response::builder()
+                    match tiers.get(&proxy_req.consumer.tier) {
+                        Some(tier) => {
+                            if proxy_req.consumer.active_connections >= tier.max_connections {
+                                Ok(Response::builder()
+                                    .status(StatusCode::TOO_MANY_REQUESTS)
+                                    .body(full("Connection limit exceeded"))
+                                    .unwrap())
+                            } else {
+                                handle_websocket(hyper_req, &proxy_req, state.clone()).await
+                            }
+                        }
+                        None => Ok(Response::builder()
                             .status(StatusCode::INTERNAL_SERVER_ERROR)
                             .body(full(
                                 "Invalid tier value. Contact support team for more information.",
                             ))
                             .unwrap()),
-                    };
-                    if proxy_req.consumer.active_connections >= tier.max_connections {
-                        return Ok(Response::builder()
-                            .status(StatusCode::TOO_MANY_REQUESTS)
-                            .body(full("Connection limit exceeded"))
-                            .unwrap());
                     }
-                    handle_websocket(hyper_req, &proxy_req, state.clone()).await
                 }
             };
 
