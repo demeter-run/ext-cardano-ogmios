@@ -126,7 +126,7 @@ async fn handle(
                     if proxy_req.consumer.active_connections >= tier.max_connections {
                         return Ok(Response::builder()
                             .status(StatusCode::TOO_MANY_REQUESTS)
-                            .body(full("Too many requests"))
+                            .body(full("Connection limit exceeded"))
                             .unwrap());
                     }
                     handle_websocket(hyper_req, &proxy_req, state.clone()).await

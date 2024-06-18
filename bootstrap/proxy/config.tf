@@ -6,11 +6,7 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = floor(60 / var.replicas)
-        },
-        {
-          "interval" = "1d",
-          "limit"    = floor(60 * 60 * 24 / var.replicas)
+          "limit"    = 500
         }
       ]
     },
@@ -20,25 +16,17 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = floor(300 / var.replicas)
-        },
-        {
-          "interval" = "1d",
-          "limit"    = floor(300 * 60 * 24 / var.replicas)
+          "limit"    = 500
         }
       ]
     },
     {
       "name"            = "2",
-      "max_connections" = 25
+      "max_connections" = 250
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = floor(2400 / var.replicas)
-        },
-        {
-          "interval" = "1d",
-          "limit"    = floor(2400 * 60 * 24 / var.replicas)
+          "limit"    = 500
         }
       ]
     },
@@ -48,11 +36,7 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = floor(4800 / var.replicas)
-        },
-        {
-          "interval" = "1d",
-          "limit"    = floor(4800 * 60 * 24 / var.replicas)
+          "limit"    = 500
         }
       ]
     }
