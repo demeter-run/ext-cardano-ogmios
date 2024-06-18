@@ -1,7 +1,8 @@
 locals {
   tiers = [
     {
-      "name" = "0",
+      "name"            = "0",
+      "max_connections" = 2
       "rates" = [
         {
           "interval" = "1m",
@@ -14,7 +15,8 @@ locals {
       ]
     },
     {
-      "name" = "1",
+      "name"            = "1",
+      "max_connections" = 5
       "rates" = [
         {
           "interval" = "1m",
@@ -27,7 +29,8 @@ locals {
       ]
     },
     {
-      "name" = "2",
+      "name"            = "2",
+      "max_connections" = 25
       "rates" = [
         {
           "interval" = "1m",
@@ -40,7 +43,8 @@ locals {
       ]
     },
     {
-      "name" = "3",
+      "name"            = "3",
+      "max_connections" = 75
       "rates" = [
         {
           "interval" = "1m",
