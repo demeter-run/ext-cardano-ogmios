@@ -122,7 +122,7 @@ pub async fn run_metrics_collector(state: Arc<State>) {
             last_execution = end;
 
             let query = format!(
-                "sum by (consumer, route, tier) (avg_over_time(ogmios_proxy_total_frame[{interval}s] @ {}))",
+                "sum by (consumer, route, tier) (avg_over_time(ogmios_proxy_total_connection[{interval}s] @ {}))",
                 end.timestamp_millis() / 1000
             );
 
