@@ -24,14 +24,14 @@ impl Config {
         let dns_zone = env::var("DNS_ZONE").unwrap_or("demeter.run".into());
         let extension_name = env::var("EXTENSION_NAME").unwrap_or("ogmios-m1".into());
         let api_key_salt = env::var("API_KEY_SALT").unwrap_or("ogmios-salt".into());
-        let dcu_per_second = env::var("DCU_PER_SECOND")
-            .expect("DCU_PER_SECOND must be set")
+        let dcu_per_second = env::var("DCU_PER_FRAME")
+            .expect("DCU_PER_FRAME must be set")
             .split(',')
             .map(|pair| {
                 let parts: Vec<&str> = pair.split('=').collect();
                 let dcu = parts[1]
                     .parse::<f64>()
-                    .expect("DCU_PER_SECOND must be NETWORK=NUMBER");
+                    .expect("DCU_PER_FRAME must be NETWORK=NUMBER");
 
                 (parts[0].into(), dcu)
             })

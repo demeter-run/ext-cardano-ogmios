@@ -34,13 +34,12 @@ variable "api_key_salt" {
   default = "ogmios-salt"
 }
 
-variable "dcu_per_second" {
+variable "dcu_per_frame" {
   type = map(string)
   default = {
-    "mainnet"        = "1"
-    "preprod"        = "1"
-    "preview"        = "1"
-    "vector-testnet" = "1"
+    "mainnet" = "10"
+    "preprod" = "5"
+    "preview" = "5"
   }
 }
 
