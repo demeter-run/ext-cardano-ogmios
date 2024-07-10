@@ -122,7 +122,7 @@ pub async fn run_metrics_collector(state: Arc<State>) {
             last_execution = end;
 
             let query = format!(
-                "sum by (consumer, route, tier) (avg_over_time(ogmios_proxy_total_connection[{interval}s] @ {}))",
+                "sum by (consumer, route, tier) (avg_over_time(ogmios_proxy_total_connections[{interval}s] @ {}))",
                 end.timestamp_millis() / 1000
             );
 
@@ -180,7 +180,7 @@ pub async fn run_metrics_collector(state: Arc<State>) {
                 let dcu_per_second = config.dcu_per_second.get(network);
                 if dcu_per_second.is_none() {
                     let error = Error::ConfigError(format!(
-                        "dcu_per_package not configured to {} network",
+                        "dcu_per_second not configured to {} network",
                         network
                     ));
                     error!(error = error.to_string());
