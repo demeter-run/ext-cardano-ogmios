@@ -312,11 +312,6 @@ pub struct ProxyRequest {
 }
 impl ProxyRequest {
     pub async fn new(hyper_req: &mut Request<Incoming>, state: &State) -> Option<Self> {
-        let mut host = get_header(hyper_req, HOST.as_str())?;
-        let host_regex = host.clone();
-
-        let captures = state.host_regex.captures(&host_regex)?;
-
         let namespace = state.config.proxy_namespace.clone();
 
         let protocol = get_header(hyper_req, UPGRADE.as_str())
@@ -329,15 +324,13 @@ impl ProxyRequest {
             })
             .unwrap_or(Protocol::Http);
 
-        if let Some(key) = captures.get(1) {
-            let key = key.as_str();
-            hyper_req
-                .headers_mut()
-                .insert(DMTR_API_KEY, HeaderValue::from_str(key).unwrap());
-            host = host.replace(&format!("{key}."), "");
-        }
+        let host = get_header(hyper_req, HOST.as_str())?;
+        let captures = state.host_regex.captures(&host)?;
 
-        let token = get_header(hyper_req, DMTR_API_KEY).unwrap_or_default();
+        let token = get_header(hyper_req, DMTR_API_KEY)
+            .or_else(|| captures.get(1).map(|v| v.as_str().to_string()))
+            .unwrap_or_default();
+
         let consumer = state.get_consumer(&token).await?;
         let instance = format!(
             "ogmios-{}-{}.{}:{}",
