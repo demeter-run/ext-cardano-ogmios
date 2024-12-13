@@ -62,7 +62,7 @@ resource "kubernetes_deployment_v1" "ogmios" {
           name              = "main"
           image             = local.image
           image_pull_policy = "IfNotPresent"
-          args = local.container_args
+          args              = local.container_args
 
           resources {
             limits = {
@@ -137,24 +137,14 @@ resource "kubernetes_deployment_v1" "ogmios" {
           }
         }
 
-        toleration {
-          effect   = "NoSchedule"
-          key      = "demeter.run/compute-profile"
-          operator = "Exists"
-        }
-
-        toleration {
-          effect   = "NoSchedule"
-          key      = "demeter.run/compute-arch"
-          operator = "Equal"
-          value    = var.compute_arch
-        }
-
-        toleration {
-          effect   = "NoSchedule"
-          key      = "demeter.run/availability-sla"
-          operator = "Equal"
-          value    = "consistent"
+        dynamic "toleration" {
+          for_each = var.tolerations
+          content {
+            effect   = toleration.value.effect
+            key      = toleration.value.key
+            operator = toleration.value.operator
+            value    = toleration.value.value
+          }
         }
       }
     }

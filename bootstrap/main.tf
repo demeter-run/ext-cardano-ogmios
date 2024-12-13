@@ -75,7 +75,7 @@ module "ogmios_instances" {
   ogmios_image     = each.value.ogmios_image
   node_private_dns = each.value.node_private_dns
   ogmios_version   = each.value.ogmios_version
-  compute_arch     = each.value.compute_arch
+  tolerations      = each.value.tolerations
   replicas         = each.value.replicas
 }
 
