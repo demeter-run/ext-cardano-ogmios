@@ -22,6 +22,7 @@ module "ogmios_v1_feature" {
   extension_name     = var.extension_name
   api_key_salt       = var.api_key_salt
   dcu_per_frame      = var.dcu_per_frame
+  dns_zone           = var.dns_zone
 }
 
 module "ogmios_v1_proxy" {
