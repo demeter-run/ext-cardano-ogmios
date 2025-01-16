@@ -32,6 +32,10 @@ variable "versions" {
   default = ["5", "6"]
 }
 
+variable "o11y_datasource_uid" {
+  type = string
+}
+
 // operator settings
 
 variable "operator_image_tag" {
@@ -145,7 +149,6 @@ variable "instances" {
     ogmios_image     = string
     node_private_dns = string
     ogmios_version   = string
-    compute_arch     = string
     replicas         = number
     resources = optional(object({
       limits = object({

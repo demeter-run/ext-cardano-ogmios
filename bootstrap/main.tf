@@ -23,6 +23,7 @@ module "ogmios_v1_feature" {
   api_key_salt       = var.api_key_salt
   dcu_per_frame      = var.dcu_per_frame
   dns_zone           = var.dns_zone
+  resources          = var.operator_resources
 }
 
 module "ogmios_v1_proxy" {
@@ -76,8 +77,26 @@ module "ogmios_instances" {
   ogmios_image     = each.value.ogmios_image
   node_private_dns = each.value.node_private_dns
   ogmios_version   = each.value.ogmios_version
-  tolerations      = each.value.tolerations
   replicas         = each.value.replicas
+  tolerations = coalesce(each.value.tolerations, [
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-profile"
+      operator = "Exists"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-arch"
+      operator = "Equal"
+      value    = "arm64"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/availability-sla"
+      operator = "Equal"
+      value    = "consistent"
+    }
+  ])
 }
 
 module "ogmios_services" {
@@ -90,4 +109,8 @@ module "ogmios_services" {
   network        = each.value.network
 }
 
+module "ogmios_monitoring" {
+  source = "./monitoring"
 
+  o11y_datasource_uid = var.o11y_datasource_uid
+}
