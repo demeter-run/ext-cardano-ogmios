@@ -144,12 +144,13 @@ variable "proxy_resources" {
 
 variable "instances" {
   type = map(object({
-    salt             = string
-    network          = string
-    ogmios_image     = string
-    node_private_dns = string
-    ogmios_version   = string
-    replicas         = number
+    salt              = string
+    network           = string
+    ogmios_image      = string
+    node_private_dns  = string
+    ogmios_version    = string
+    replicas          = number
+    image_pull_secret = optional(string)
     resources = optional(object({
       limits = object({
         cpu    = string

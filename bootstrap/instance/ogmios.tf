@@ -54,6 +54,13 @@ resource "kubernetes_deployment_v1" "ogmios" {
       spec {
         restart_policy = "Always"
 
+        dynamic "image_pull_secrets" {
+          for_each = var.image_pull_secret != null ? [var.image_pull_secret] : []
+          content {
+            name = image_pull_secrets.value
+          }
+        }
+
         security_context {
           fs_group = 1000
         }
@@ -89,6 +96,16 @@ resource "kubernetes_deployment_v1" "ogmios" {
           volume_mount {
             name       = "node-config"
             mount_path = "/config"
+          }
+
+          dynamic "volume_mount" {
+            for_each = var.network == "vector-testnet" ? toset([1]) : toset([])
+
+            content {
+              name       = "genesis"
+              mount_path = "/genesis/${var.network}"
+            }
+
           }
 
           liveness_probe {
@@ -135,6 +152,19 @@ resource "kubernetes_deployment_v1" "ogmios" {
           config_map {
             name = "configs-${var.network}"
           }
+        }
+
+        dynamic "volume" {
+          for_each = var.network == "vector-testnet" ? toset([1]) : toset([])
+
+          content {
+            name = "genesis"
+
+            config_map {
+              name = "genesis-${var.network}"
+            }
+          }
+
         }
 
         dynamic "toleration" {

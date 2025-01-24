@@ -71,13 +71,14 @@ module "ogmios_instances" {
   for_each   = var.instances
   source     = "./instance"
 
-  namespace        = var.namespace
-  salt             = each.value.salt
-  network          = each.value.network
-  ogmios_image     = each.value.ogmios_image
-  node_private_dns = each.value.node_private_dns
-  ogmios_version   = each.value.ogmios_version
-  replicas         = each.value.replicas
+  namespace         = var.namespace
+  salt              = each.value.salt
+  network           = each.value.network
+  ogmios_image      = each.value.ogmios_image
+  node_private_dns  = each.value.node_private_dns
+  ogmios_version    = each.value.ogmios_version
+  replicas          = each.value.replicas
+  image_pull_secret = each.value.image_pull_secret
   tolerations = coalesce(each.value.tolerations, [
     {
       effect   = "NoSchedule"

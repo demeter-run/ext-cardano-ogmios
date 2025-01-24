@@ -17,6 +17,22 @@ resource "kubernetes_config_map" "node-config" {
   }
 }
 
+resource "kubernetes_config_map" "genesis" {
+  for_each = var.network == "vector-testnet" ? toset(["vector-testnet"]) : toset([])
+
+  metadata {
+    namespace = var.namespace
+    name      = "genesis-${var.network}"
+  }
+
+  data = {
+    "alonzo.json"  = "${file("${path.module}/${var.network}/alonzo.json")}"
+    "byron.json"   = "${file("${path.module}/${var.network}/byron.json")}"
+    "conway.json"  = "${file("${path.module}/${var.network}/conway.json")}"
+    "shelley.json" = "${file("${path.module}/${var.network}/shelley.json")}"
+  }
+}
+
 output "cm_name" {
   value = "configs-${var.network}"
 }

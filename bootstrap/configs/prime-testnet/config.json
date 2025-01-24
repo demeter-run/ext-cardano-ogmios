@@ -1,8 +1,8 @@
 {
-  "ByronGenesisFile": "/genesis/prime-testnet/byron/genesis.json",
-  "ShelleyGenesisFile": "/genesis/prime-testnet/shelley/genesis.json",
-  "AlonzoGenesisFile": "/genesis/prime-testnet/shelley/genesis.alonzo.json",
-  "ConwayGenesisFile": "/genesis/prime-testnet/shelley/genesis.conway.json",
+  "ByronGenesisFile": "/genesis/prime-testnet/byron-genesis.json",
+  "ShelleyGenesisFile": "/genesis/prime-testnet/shelley-genesis.json",
+  "AlonzoGenesisFile": "/genesis/prime-testnet/alonzo-genesis.json",
+  "ConwayGenesisFile": "/genesis/prime-testnet/conway-genesis.json",
   "ByronGenesisHash": "acd3e7c4cc071ae176fa253e654f0dd4e759892b16e958d8bd3c393f5c6c66d2",
   "ShelleyGenesisHash": "0b67b0cb16e973478888efb1c7f69fca8e80489369afed94624a588e94a94f2b",
   "AlonzoGenesisHash": "0f715ff78fcab739c6cb2cc1073eb87d0ffe3514218bfa0337d416f6fbaf7886",
