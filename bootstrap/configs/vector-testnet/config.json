@@ -1,101 +1,92 @@
 {
-  "ByronGenesisFile": "/genesis/vector-testnet/byron.json",
-  "ShelleyGenesisFile": "/genesis/vector-testnet/shelley.json",
   "AlonzoGenesisFile": "/genesis/vector-testnet/alonzo.json",
+  "AlonzoGenesisHash": "694a30a4be097b10989dde200b273c52df0c4d2e2981cee3537bed7122302291",
+  "ByronGenesisFile": "/genesis/vector-testnet/byron.json",
+  "ByronGenesisHash": "765ffc6574cd68ee743479e7cc2855d9f4066dda5d65fe56b9762e03d193ed0b",
   "ConwayGenesisFile": "/genesis/vector-testnet/conway.json",
-  "SocketPath": "db/node.socket",
-  "PBftSignatureThreshold": 0.6,
-  "MaxConcurrencyBulkSync": 1,
-  "MaxConcurrencyDeadline": 2,
-  "Protocol": "Cardano",
-  "RequiresNetworkMagic": "RequiresMagic",
+  "ConwayGenesisHash": "2629ff28ff9539312851b626212dc45be41784c450ab396c0b1da40b2429b78e",
+  "EnableP2P": false,
+  "ExperimentalProtocolsEnabled": true,
+  "LastKnownBlockVersion-Alt": 0,
   "LastKnownBlockVersion-Major": 6,
   "LastKnownBlockVersion-Minor": 0,
-  "LastKnownBlockVersion-Alt": 0,
-  "TurnOnLogging": true,
-  "TurnOnLogMetrics": true,
-  "minSeverity": "Debug",
-  "TracingVerbosity": "NormalVerbosity",
-  "setupBackends": ["KatipBK"],
-  "defaultBackends": ["KatipBK"],
-  "hasEKG": 12788,
-  "hasPrometheus": [
-    "0.0.0.0",
-    12798
-  ],
-  "setupScribes": [
-    {
-      "scKind": "FileSK",
-      "scName": "logs/mainnet.log",
-      "scFormat": "ScText"
-    },
-    {
-      "scKind": "StdoutSK",
-      "scName": "stdout",
-      "scFormat": "ScText"
-    }
-  ],
-  "defaultScribes": [
-    ["FileSK", "logs/mainnet.log"],
-    ["StdoutSK", "stdout"]
-  ],
-  "rotation": {
-    "rpLogLimitBytes": 5000000,
-    "rpKeepFilesNum": 3,
-    "rpMaxAgeHours": 24
-  },
+  "Protocol": "Cardano",
+  "RequiresNetworkMagic": "RequiresMagic",
+  "ShelleyGenesisFile": "/genesis/vector-testnet/shelley.json",
+  "ShelleyGenesisHash": "8189bc6863f6ac448fca1e08c4e8ade54b05b7b0cfcd3b84a7932324ef782a98",
+  "TargetNumberOfActivePeers": 20,
+  "TargetNumberOfEstablishedPeers": 50,
+  "TargetNumberOfKnownPeers": 100,
+  "TargetNumberOfRootPeers": 100,
+  "TestAllegraHardForkAtEpoch": 0,
+  "TestAlonzoHardForkAtEpoch": 0,
+  "TestBabbageHardForkAtEpoch": 0,
+  "TestMaryHardForkAtEpoch": 0,
+  "TestShelleyHardForkAtEpoch": 0,
+  "TraceAcceptPolicy": true,
   "TraceBlockFetchClient": false,
   "TraceBlockFetchDecisions": false,
   "TraceBlockFetchProtocol": false,
   "TraceBlockFetchProtocolSerialised": false,
   "TraceBlockFetchServer": false,
-  "TraceBlockchainTime": false,
   "TraceChainDb": true,
-  "TraceChainSyncClient": false,
   "TraceChainSyncBlockServer": false,
+  "TraceChainSyncClient": false,
   "TraceChainSyncHeaderServer": false,
   "TraceChainSyncProtocol": false,
+  "TraceConnectionManager": true,
   "TraceDNSResolver": true,
   "TraceDNSSubscription": true,
+  "TraceDiffusionInitialization": true,
   "TraceErrorPolicy": true,
-  "TraceLocalErrorPolicy": true,
   "TraceForge": true,
-  "TraceHandshake": false,
+  "TraceHandshake": true,
+  "TraceInboundGovernor": true,
   "TraceIpSubscription": true,
-  "TraceLocalRootPeers": true,
-  "TracePublicRootPeers": true,
-  "TracePeerSelection": true,
-  "TraceDebugPeerSelection": false,
-  "TracePeerSelectionActions": true,
-  "TraceConnectionManager": true,
-  "TraceServer": true,
-  "TraceLocalConnectionManager": false,
-  "TraceLocalServer": false,
+  "TraceLedgerPeers": true,
   "TraceLocalChainSyncProtocol": false,
-  "TraceLocalHandshake": false,
+  "TraceLocalConnectionManager": true,
+  "TraceLocalErrorPolicy": true,
+  "TraceLocalHandshake": true,
+  "TraceLocalRootPeers": true,
   "TraceLocalTxSubmissionProtocol": false,
   "TraceLocalTxSubmissionServer": false,
   "TraceMempool": true,
   "TraceMux": false,
+  "TracePeerSelection": true,
+  "TracePeerSelectionActions": true,
+  "TracePublicRootPeers": true,
+  "TraceServer": true,
   "TraceTxInbound": false,
   "TraceTxOutbound": false,
   "TraceTxSubmissionProtocol": false,
+  "TracingVerbosity": "NormalVerbosity",
+  "TurnOnLogMetrics": true,
+  "TurnOnLogging": true,
+  "defaultBackends": ["KatipBK"],
+  "defaultScribes": [["StdoutSK", "stdout"]],
+  "hasEKG": 12788,
+  "hasPrometheus": ["127.0.0.1", 12798],
+  "minSeverity": "Debug",
   "options": {
     "mapBackends": {
-      "cardano.node.metrics": ["EKGViewBK"]
+      "cardano.node.metrics": ["EKGViewBK"],
+      "cardano.node.resources": ["EKGViewBK"]
     },
-    "mapScribes": {
-      "cardano.node.metrics": ["FileSK::logs/mainnet.log"]
-    },
-    "mapSeverity": {
-      "cardano.node.ChainDB": "Notice",
-      "cardano.node.DnsSubscription": "Debug"
-    }
+    "mapSubtrace": { "cardano.node.metrics": { "subtrace": "Neutral" } }
   },
-  "TestShelleyHardForkAtEpoch": 0,
-  "TestAllegraHardForkAtEpoch": 0,
-  "TestMaryHardForkAtEpoch": 0,
-  "TestAlonzoHardForkAtEpoch": 0,
-  "TestBabbageHardForkAtEpoch": 0,
-  "ExperimentalProtocolsEnabled": true
+  "rotation": {
+    "rpKeepFilesNum": 10,
+    "rpLogLimitBytes": 5000000,
+    "rpMaxAgeHours": 24
+  },
+  "setupBackends": ["KatipBK"],
+  "setupScribes": [
+    {
+      "scFormat": "ScText",
+      "scKind": "StdoutSK",
+      "scName": "stdout",
+      "scRotation": null
+    }
+  ]
 }
