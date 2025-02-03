@@ -43,7 +43,7 @@ resource "grafana_rule_group" "instance_is_down" {
 
       model = jsonencode({
         editorMode    = "code",
-        expr          = "count(avg_over_time(ogmios_connected[10m] offset 1h)) by (pod) unless count(avg_over_time(ogmios_connected[10m])) by (pod)",
+        expr          = "count(avg_over_time(ogmios_connected{pod!~\"ogmios-vector-testnet-.*\"}[10m] offset 1h)) by (pod) unless count(avg_over_time(ogmios_connected{pod!~\"ogmios-vector-testnet-.*\"}[10m])) by (pod)",
         hide          = false,
         intervalMs    = 1000,
         legendFormat  = "__auto",
