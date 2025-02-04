@@ -34,11 +34,11 @@ locals {
     },
     {
       "name"            = "3",
-      "max_connections" = 250
+      "max_connections" = 450
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = 500
+          "limit"    = 1500
         }
       ]
     }
