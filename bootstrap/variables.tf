@@ -33,7 +33,8 @@ variable "versions" {
 }
 
 variable "o11y_datasource_uid" {
-  type = string
+  type    = string
+  default = null
 }
 
 // operator settings
@@ -89,16 +90,12 @@ variable "operator_resources" {
     }
   }
 }
-// proxy
 
-# variable "proxy_image_tag" {
-#   type = string
-# }
-
-# variable "proxy_replicas" {
-#   type    = number
-#   default = 1
-# }
+// proxy green settings
+variable "proxy_green_name" {
+  type    = string
+  default = "proxy-green"
+}
 
 variable "proxy_green_image_tag" {
   type = string
@@ -107,6 +104,22 @@ variable "proxy_green_image_tag" {
 variable "proxy_green_replicas" {
   type    = number
   default = 1
+}
+
+variable "proxy_green_extra_annotations" {
+  type    = map(string)
+  default = {}
+}
+
+variable "proxy_green_environment" {
+  type    = string
+  default = "green"
+}
+
+// proxy blue settings
+variable "proxy_blue_name" {
+  type    = string
+  default = "proxy"
 }
 
 variable "proxy_blue_image_tag" {
@@ -118,6 +131,15 @@ variable "proxy_blue_replicas" {
   default = 1
 }
 
+variable "proxy_blue_extra_annotations" {
+  type    = map(string)
+  default = {}
+}
+
+variable "proxy_blue_environment" {
+  type    = string
+  default = null
+}
 
 variable "proxy_resources" {
   type = object({

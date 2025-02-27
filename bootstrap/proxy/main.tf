@@ -20,6 +20,12 @@ variable "environment" {
   default = null
 }
 
+variable "extra_annotations" {
+  description = "Extra annotations to add to the proxy services"
+  type        = map(string)
+  default     = {}
+}
+
 variable "namespace" {
   type = string
 }

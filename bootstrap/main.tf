@@ -27,32 +27,35 @@ module "ogmios_v1_feature" {
 }
 
 module "ogmios_v1_proxy" {
-  depends_on      = [kubernetes_namespace.namespace]
-  source          = "./proxy"
-  namespace       = var.namespace
-  replicas        = var.proxy_blue_replicas
-  proxy_image_tag = var.proxy_blue_image_tag
-  extension_name  = var.extension_name
-  networks        = var.networks
-  cloud_provider  = var.cloud_provider
-  dns_zone        = var.dns_zone
-  cluster_issuer  = var.cluster_issuer
-  name            = "proxy"
+  depends_on        = [kubernetes_namespace.namespace]
+  source            = "./proxy"
+  cloud_provider    = var.cloud_provider
+  cluster_issuer    = var.cluster_issuer
+  dns_zone          = var.dns_zone
+  environment       = var.proxy_blue_environment
+  extension_name    = var.extension_name
+  extra_annotations = var.proxy_blue_extra_annotations
+  name              = var.proxy_blue_name
+  namespace         = var.namespace
+  networks          = var.networks
+  proxy_image_tag   = var.proxy_blue_image_tag
+  replicas          = var.proxy_blue_replicas
 }
 
 module "ogmios_v1_proxy_green" {
-  depends_on      = [kubernetes_namespace.namespace]
-  source          = "./proxy"
-  namespace       = var.namespace
-  replicas        = var.proxy_green_replicas
-  proxy_image_tag = var.proxy_green_image_tag
-  extension_name  = var.extension_name
-  networks        = ["mainnet", "preprod", "preview", "vector-testnet"]
-  environment     = "green"
-  cloud_provider  = var.cloud_provider
-  dns_zone        = var.dns_zone
-  cluster_issuer  = var.cluster_issuer
-  name            = "proxy-green"
+  depends_on        = [kubernetes_namespace.namespace]
+  source            = "./proxy"
+  cloud_provider    = var.cloud_provider
+  cluster_issuer    = var.cluster_issuer
+  dns_zone          = var.dns_zone
+  environment       = var.proxy_green_environment
+  extension_name    = var.extension_name
+  extra_annotations = var.proxy_green_extra_annotations
+  name              = var.proxy_green_name
+  namespace         = var.namespace
+  networks          = var.networks
+  proxy_image_tag   = var.proxy_green_image_tag
+  replicas          = var.proxy_green_replicas
 }
 
 // mainnet
@@ -112,6 +115,8 @@ module "ogmios_services" {
 
 module "ogmios_monitoring" {
   source = "./monitoring"
+
+  for_each = var.o11y_datasource_uid != null ? toset(["enabled"]) : toset([])
 
   o11y_datasource_uid = var.o11y_datasource_uid
 }
