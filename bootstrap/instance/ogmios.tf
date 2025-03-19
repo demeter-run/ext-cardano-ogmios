@@ -65,6 +65,75 @@ resource "kubernetes_deployment_v1" "ogmios" {
           fs_group = 1000
         }
 
+        dynamic "affinity" {
+          for_each = (
+            var.node_affinity != null &&
+            (
+              try(length(var.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_term), 0) > 0 ||
+              try(length(var.node_affinity.preferred_during_scheduling_ignored_during_execution), 0) > 0
+            )
+          ) ? [var.node_affinity] : []
+          content {
+            node_affinity {
+              dynamic "required_during_scheduling_ignored_during_execution" {
+                for_each = (
+                  var.node_affinity.required_during_scheduling_ignored_during_execution != null &&
+                  length(var.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_term) > 0
+                ) ? [var.node_affinity.required_during_scheduling_ignored_during_execution] : []
+                content {
+                  dynamic "node_selector_term" {
+                    for_each = required_during_scheduling_ignored_during_execution.value.node_selector_term
+                    content {
+                      dynamic "match_expressions" {
+                        for_each = length(node_selector_term.value.match_expressions) > 0 ? node_selector_term.value.match_expressions : []
+                        content {
+                          key      = match_expressions.value.key
+                          operator = match_expressions.value.operator
+                          values   = match_expressions.value.values
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              dynamic "preferred_during_scheduling_ignored_during_execution" {
+                for_each = (
+                  var.node_affinity.preferred_during_scheduling_ignored_during_execution != null &&
+                  length(var.node_affinity.preferred_during_scheduling_ignored_during_execution) > 0
+                ) ? var.node_affinity.preferred_during_scheduling_ignored_during_execution : []
+                content {
+                  weight = preferred_during_scheduling_ignored_during_execution.value.weight
+
+                  dynamic "preference" {
+                    for_each = (
+                      length(preferred_during_scheduling_ignored_during_execution.value.preference.match_expressions) > 0 ||
+                      length(preferred_during_scheduling_ignored_during_execution.value.preference.match_fields) > 0
+                    ) ? [preferred_during_scheduling_ignored_during_execution.value.preference] : []
+                    content {
+                      dynamic "match_expressions" {
+                        for_each = length(preference.value.match_expressions) > 0 ? preference.value.match_expressions : []
+                        content {
+                          key      = match_expressions.value.key
+                          operator = match_expressions.value.operator
+                          values   = match_expressions.value.values
+                        }
+                      }
+                      dynamic "match_fields" {
+                        for_each = length(preference.value.match_fields) > 0 ? preference.value.match_fields : []
+                        content {
+                          key      = match_fields.value.key
+                          operator = match_fields.value.operator
+                          values   = match_fields.value.values
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
         container {
           name              = "main"
           image             = local.image

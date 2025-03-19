@@ -101,6 +101,10 @@ module "ogmios_instances" {
       value    = "consistent"
     }
   ])
+  node_affinity = coalesce(each.value.node_affinity, {
+    required_during_scheduling_ignored_during_execution  = {}
+    preferred_during_scheduling_ignored_during_execution = []
+  })
 }
 
 module "ogmios_services" {
