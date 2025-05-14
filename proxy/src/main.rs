@@ -15,6 +15,7 @@ use tracing::Level;
 
 mod auth;
 mod config;
+mod health;
 mod limiter;
 mod metrics;
 mod proxy;
@@ -34,8 +35,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let metrics = metrics::start(state.clone());
     let proxy_server = proxy::start(state.clone());
+    let healthloop = health::start(state.clone());
 
-    tokio::join!(metrics, proxy_server);
+    tokio::join!(metrics, proxy_server, healthloop);
 
     Ok(())
 }
@@ -47,6 +49,7 @@ pub struct State {
     consumers: RwLock<HashMap<String, Consumer>>,
     tiers: RwLock<HashMap<String, Tier>>,
     limiter: RwLock<HashMap<String, Vec<Arc<RateLimiter>>>>,
+    upstream_health: RwLock<bool>,
 }
 impl State {
     pub fn try_new() -> Result<Self, Box<dyn Error>> {
@@ -64,6 +67,7 @@ impl State {
             consumers,
             tiers,
             limiter,
+            upstream_health: RwLock::new(false),
         })
     }
 
