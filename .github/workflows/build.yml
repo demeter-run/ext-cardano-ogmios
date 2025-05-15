@@ -1,0 +1,117 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - ".github/image/Dockerfile"
+      - ".github/workflows/build.yml"
+      - "operator/**"
+      - "proxy/**"
+
+jobs:
+  build:
+    continue-on-error: true
+
+    strategy:
+      matrix:
+        include:
+          - release_for: Linux-x86_64
+            build_on: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: "--locked --release"
+
+          - release_for: Linux-arm64
+            build_on: ubuntu-22.04-arm
+            target: "aarch64-unknown-linux-gnu"
+            args: "--locked --release"
+
+    runs-on: ${{ matrix.build_on }}
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "release"
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Run cargo build
+        run: cargo build --target ${{ matrix.target }} ${{ matrix.args }}
+
+      - name: rename binaries
+        run: |
+          mv target/${{ matrix.target }}/release/controller${{ matrix.ext }} controller-${{ matrix.release_for }}${{ matrix.ext }}
+          mv target/${{ matrix.target }}/release/proxy${{ matrix.ext }} proxy-${{ matrix.release_for }}${{ matrix.ext }}
+
+      - name: upload controller 
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-controller-${{ matrix.release_for }}
+          path: controller-${{ matrix.release_for }}${{ matrix.ext }}
+
+      - name: upload proxy 
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-proxy-${{ matrix.release_for }}
+          path: proxy-${{ matrix.release_for }}${{ matrix.ext }}
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    strategy:
+      matrix:
+        include:
+          - tags: ghcr.io/demeter-run/ext-cardano-ogmios-operator,ghcr.io/demeter-run/ext-cardano-ogmios-operator:${{ github.sha }}
+            binary: controller
+          - tags: ghcr.io/demeter-run/ext-cardano-ogmios-proxy,ghcr.io/demeter-run/ext-cardano-ogmios-proxy:${{ github.sha }}
+            binary: proxy
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+          path: .github/image/bin
+
+      # we need to rename the artifact so that the name matches
+      # the value that Docker uses for TARGET_ARCH to keep the
+      # Dockerfile simple
+      - name: Rename artifacts
+        run: |+
+          mv .github/image/bin/controller-Linux-x86_64 .github/image/bin/controller-Linux-amd64
+          mv .github/image/bin/proxy-Linux-x86_64 .github/image/bin/proxy-Linux-amd64
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .github/image
+          platforms: linux/arm64,linux/amd64
+          push: true
+          tags: ${{ matrix.tags }}
+          build-args: BIN=${{ matrix.binary }}
