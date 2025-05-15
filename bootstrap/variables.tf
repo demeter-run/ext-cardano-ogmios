@@ -9,7 +9,7 @@ variable "dns_zone" {
 
 variable "cluster_issuer" {
   type    = string
-  default = "letsencrypt"
+  default = "letsencrypt-dns01"
 }
 
 variable "extension_name" {
@@ -91,12 +91,6 @@ variable "operator_resources" {
   }
 }
 
-// proxy green settings
-variable "proxy_green_name" {
-  type    = string
-  default = "proxy-green"
-}
-
 variable "proxy_green_image_tag" {
   type = string
 }
@@ -116,12 +110,6 @@ variable "proxy_green_environment" {
   default = "green"
 }
 
-// proxy blue settings
-variable "proxy_blue_name" {
-  type    = string
-  default = "proxy"
-}
-
 variable "proxy_blue_image_tag" {
   type = string
 }
@@ -138,7 +126,7 @@ variable "proxy_blue_extra_annotations" {
 
 variable "proxy_blue_environment" {
   type    = string
-  default = null
+  default = "blue"
 }
 
 variable "proxy_resources" {
@@ -162,6 +150,35 @@ variable "proxy_resources" {
       memory : "250Mi"
     }
   }
+}
+
+variable "proxy_tolerations" {
+  type = list(object({
+    effect   = string
+    key      = string
+    operator = string
+    value    = optional(string)
+  }))
+  default = [
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-profile"
+      operator = "Equal"
+      value    = "general-purpose"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-arch"
+      operator = "Equal"
+      value    = "x86"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/availability-sla"
+      operator = "Equal"
+      value    = "consistent"
+    }
+  ]
 }
 
 variable "instances" {

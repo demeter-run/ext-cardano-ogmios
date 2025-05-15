@@ -1,23 +1,17 @@
 locals {
-  name = var.name != null ? var.name : "proxy-${var.network}"
-  role = "proxy-${var.network}"
+  name = "proxy-${var.network}-${var.environment}"
+  role = "proxy-${var.network}-${var.environment}"
 
   prometheus_port = 9187
   prometheus_addr = "0.0.0.0:${local.prometheus_port}"
   proxy_port      = 8080
   proxy_addr      = "0.0.0.0:${local.proxy_port}"
-  # proxy_labels = var.environment != null ? { role = local.role, environment = var.environment } : { role = local.role }
-  proxy_labels = var.environment != null ? { role = "${local.role}-${var.environment}" } : { role = local.role }
-}
-
-variable "name" {
-  type    = string
-  default = null
+  proxy_labels    = { role = "${local.role}" }
 }
 
 // blue - green
 variable "environment" {
-  default = null
+  type = string
 }
 
 variable "extra_annotations" {
@@ -88,7 +82,7 @@ variable "dns_zone" {
 
 variable "cluster_issuer" {
   type    = string
-  default = "letsencrypt"
+  default = "letsencrypt-dns01"
 }
 
 variable "cloud_provider" {
@@ -99,4 +93,34 @@ variable "cloud_provider" {
 variable "healthcheck_port" {
   type    = number
   default = null
+}
+
+variable "tolerations" {
+  description = "List of tolerations for the instance"
+  type = list(object({
+    effect   = string
+    key      = string
+    operator = string
+    value    = optional(string)
+  }))
+  default = [
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-profile"
+      operator = "Equal"
+      value    = "general-purpose"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-arch"
+      operator = "Equal"
+      value    = "x86"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/availability-sla"
+      operator = "Equal"
+      value    = "consistent"
+    }
+  ]
 }

@@ -31,17 +31,17 @@ module "ogmios_v1_proxies_blue" {
   source     = "./proxy"
   for_each   = { for network in var.networks : "${network}" => network }
 
-  network           = each.network
+  network           = each.key
   cloud_provider    = var.cloud_provider
   cluster_issuer    = var.cluster_issuer
   dns_zone          = var.dns_zone
   environment       = var.proxy_blue_environment
   extension_name    = var.extension_name
   extra_annotations = var.proxy_blue_extra_annotations
-  name              = var.proxy_blue_name
   namespace         = var.namespace
   proxy_image_tag   = var.proxy_blue_image_tag
   replicas          = var.proxy_blue_replicas
+  tolerations       = var.proxy_tolerations
 }
 
 module "ogmios_v1_proxies_green" {
@@ -49,17 +49,17 @@ module "ogmios_v1_proxies_green" {
   source     = "./proxy"
   for_each   = { for network in var.networks : "${network}" => network }
 
-  network           = each.network
+  network           = each.key
   cloud_provider    = var.cloud_provider
   cluster_issuer    = var.cluster_issuer
   dns_zone          = var.dns_zone
   environment       = var.proxy_green_environment
   extension_name    = var.extension_name
   extra_annotations = var.proxy_green_extra_annotations
-  name              = var.proxy_green_name
   namespace         = var.namespace
   proxy_image_tag   = var.proxy_green_image_tag
   replicas          = var.proxy_green_replicas
+  tolerations       = var.proxy_tolerations
 }
 
 // mainnet
