@@ -1,6 +1,6 @@
 locals {
-  name = var.name
-  role = "proxy"
+  name = var.name != null ? var.name : "proxy-${var.network}"
+  role = "proxy-${var.network}"
 
   prometheus_port = 9187
   prometheus_addr = "0.0.0.0:${local.prometheus_port}"
@@ -12,7 +12,7 @@ locals {
 
 variable "name" {
   type    = string
-  default = "proxy"
+  default = null
 }
 
 // blue - green
@@ -72,9 +72,8 @@ variable "extension_name" {
   type = string
 }
 
-variable "networks" {
-  type    = list(string)
-  default = ["mainnet", "preprod", "preview", "vector-testnet"]
+variable "network" {
+  type = string
 }
 
 variable "versions" {

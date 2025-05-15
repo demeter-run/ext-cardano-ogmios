@@ -97,7 +97,7 @@ async fn handle(
     state: Arc<State>,
 ) -> Result<ProxyResponse, hyper::Error> {
     match (hyper_req.method(), hyper_req.uri().path()) {
-        (&Method::GET, "/healthz") => handle_healthz().await,
+        (&Method::GET, "/healthz") => handle_healthz(&state).await,
         _ => {
             let proxy_req_result = ProxyRequest::new(&mut hyper_req, &state).await;
             if proxy_req_result.is_none() {
@@ -281,11 +281,18 @@ async fn handle_websocket(
     Ok(res)
 }
 
-async fn handle_healthz() -> Result<ProxyResponse, hyper::Error> {
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .body(full("pong"))
-        .unwrap())
+async fn handle_healthz(state: &State) -> Result<ProxyResponse, hyper::Error> {
+    if *state.upstream_health.read().await {
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .body(full("OK"))
+            .unwrap())
+    } else {
+        Ok(Response::builder()
+            .status(StatusCode::BAD_GATEWAY)
+            .body(full(""))
+            .unwrap())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -332,10 +339,12 @@ impl ProxyRequest {
             .unwrap_or_default();
 
         let consumer = state.get_consumer(&token).await?;
-        let instance = format!(
-            "ogmios-{}-{}.{}:{}",
-            consumer.network, consumer.version, state.config.ogmios_dns, state.config.ogmios_port
-        );
+
+        if consumer.network != state.config.network {
+            return None;
+        }
+
+        let instance = state.config.instance(&consumer.version);
 
         Some(Self {
             namespace,

@@ -26,9 +26,12 @@ module "ogmios_v1_feature" {
   resources          = var.operator_resources
 }
 
-module "ogmios_v1_proxy" {
-  depends_on        = [kubernetes_namespace.namespace]
-  source            = "./proxy"
+module "ogmios_v1_proxies_blue" {
+  depends_on = [kubernetes_namespace.namespace]
+  source     = "./proxy"
+  for_each   = { for network in var.networks : "${network}" => network }
+
+  network           = each.network
   cloud_provider    = var.cloud_provider
   cluster_issuer    = var.cluster_issuer
   dns_zone          = var.dns_zone
@@ -37,14 +40,16 @@ module "ogmios_v1_proxy" {
   extra_annotations = var.proxy_blue_extra_annotations
   name              = var.proxy_blue_name
   namespace         = var.namespace
-  networks          = var.networks
   proxy_image_tag   = var.proxy_blue_image_tag
   replicas          = var.proxy_blue_replicas
 }
 
-module "ogmios_v1_proxy_green" {
-  depends_on        = [kubernetes_namespace.namespace]
-  source            = "./proxy"
+module "ogmios_v1_proxies_green" {
+  depends_on = [kubernetes_namespace.namespace]
+  source     = "./proxy"
+  for_each   = { for network in var.networks : "${network}" => network }
+
+  network           = each.network
   cloud_provider    = var.cloud_provider
   cluster_issuer    = var.cluster_issuer
   dns_zone          = var.dns_zone
@@ -53,7 +58,6 @@ module "ogmios_v1_proxy_green" {
   extra_annotations = var.proxy_green_extra_annotations
   name              = var.proxy_green_name
   namespace         = var.namespace
-  networks          = var.networks
   proxy_image_tag   = var.proxy_green_image_tag
   replicas          = var.proxy_green_replicas
 }
