@@ -37,7 +37,7 @@ module "ogmios_v1_proxies_blue" {
   dns_zone          = var.dns_zone
   environment       = var.proxy_blue_environment
   extension_name    = var.extension_name
-  extra_annotations = var.proxy_blue_extra_annotations
+  extra_annotations = lookup(var.proxy_blue_extra_annotations_by_network, each.value, {})
   namespace         = var.namespace
   proxy_image_tag   = var.proxy_blue_image_tag
   replicas          = var.proxy_blue_replicas
@@ -55,7 +55,7 @@ module "ogmios_v1_proxies_green" {
   dns_zone          = var.dns_zone
   environment       = var.proxy_green_environment
   extension_name    = var.extension_name
-  extra_annotations = var.proxy_green_extra_annotations
+  extra_annotations = lookup(var.proxy_green_extra_annotations_by_network, each.value, {})
   namespace         = var.namespace
   proxy_image_tag   = var.proxy_green_image_tag
   replicas          = var.proxy_green_replicas
