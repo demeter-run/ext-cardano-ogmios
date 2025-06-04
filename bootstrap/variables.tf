@@ -7,6 +7,11 @@ variable "dns_zone" {
   default = "demeter.run"
 }
 
+variable "dns_names" {
+  type    = list(string)
+  default = null
+}
+
 variable "cluster_issuer" {
   type    = string
   default = "letsencrypt-dns01"
