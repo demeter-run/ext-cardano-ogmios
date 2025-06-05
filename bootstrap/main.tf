@@ -35,6 +35,7 @@ module "ogmios_v1_proxies_blue" {
   cloud_provider    = var.cloud_provider
   cluster_issuer    = var.cluster_issuer
   dns_zone          = var.dns_zone
+  dns_names         = var.dns_names
   environment       = var.proxy_blue_environment
   extension_name    = var.extension_name
   extra_annotations = lookup(var.proxy_blue_extra_annotations_by_network, each.value, {})
@@ -53,6 +54,7 @@ module "ogmios_v1_proxies_green" {
   cloud_provider    = var.cloud_provider
   cluster_issuer    = var.cluster_issuer
   dns_zone          = var.dns_zone
+  dns_names         = var.dns_names
   environment       = var.proxy_green_environment
   extension_name    = var.extension_name
   extra_annotations = lookup(var.proxy_green_extra_annotations_by_network, each.value, {})
