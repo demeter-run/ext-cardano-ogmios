@@ -8,8 +8,9 @@ variable "dns_zone" {
 }
 
 variable "dns_names" {
-  type    = list(string)
-  default = null
+  description = "Map of network to list of DNS names"
+  type        = map(list(string))
+  default     = {}
 }
 
 variable "cluster_issuer" {
