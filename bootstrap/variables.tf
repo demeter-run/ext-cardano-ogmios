@@ -7,6 +7,12 @@ variable "dns_zone" {
   default = "demeter.run"
 }
 
+variable "dns_names" {
+  description = "Map of network to list of DNS names"
+  type        = map(list(string))
+  default     = {}
+}
+
 variable "cluster_issuer" {
   type    = string
   default = "letsencrypt-dns01"
@@ -100,9 +106,14 @@ variable "proxy_green_replicas" {
   default = 1
 }
 
-variable "proxy_green_extra_annotations" {
-  type    = map(string)
-  default = {}
+variable "proxy_green_extra_annotations_by_network" {
+  description = <<EOT
+A map where keys are network names (only those defined in the "networks" variable)
+and values are maps of extra annotations for the blue proxy service specific
+to that network.
+EOT
+  type        = map(map(string))
+  default     = {}
 }
 
 variable "proxy_green_environment" {
@@ -119,9 +130,14 @@ variable "proxy_blue_replicas" {
   default = 1
 }
 
-variable "proxy_blue_extra_annotations" {
-  type    = map(string)
-  default = {}
+variable "proxy_blue_extra_annotations_by_network" {
+  description = <<EOT
+A map where keys are network names (only those defined in the "networks" variable)
+and values are maps of extra annotations for the blue proxy service specific
+to that network.
+EOT
+  type        = map(map(string))
+  default     = {}
 }
 
 variable "proxy_blue_environment" {
