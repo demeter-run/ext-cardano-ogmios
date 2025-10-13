@@ -13,6 +13,8 @@ use tiers::Tier;
 use tokio::sync::RwLock;
 use tracing::Level;
 
+use crate::utils::handle_legacy_networks;
+
 mod auth;
 mod config;
 mod health;
@@ -93,7 +95,7 @@ impl Display for Consumer {
 }
 impl From<&OgmiosPort> for Consumer {
     fn from(value: &OgmiosPort) -> Self {
-        let network = value.spec.network.to_string();
+        let network = handle_legacy_networks(&value.spec.network);
         let version = value.spec.version.to_string();
         let tier = value.spec.throughput_tier.to_string();
         let key = value.status.as_ref().unwrap().auth_token.clone();
