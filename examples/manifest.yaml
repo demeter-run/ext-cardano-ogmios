@@ -311,8 +311,6 @@ spec:
           env:
             - name: ADDR
               value: "0.0.0.0:9187"
-            - name: DCU_PER_FRAME
-              value: "preview=5,preprod=5,mainnet=5"
             - name: METRICS_DELAY
               value: "40"
             - name: PROMETHEUS_URL

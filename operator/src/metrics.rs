@@ -11,7 +11,6 @@ use crate::{get_config, Error, OgmiosPort, State};
 
 #[derive(Clone)]
 pub struct Metrics {
-    pub dcu: IntCounterVec,
     pub usage: IntCounterVec,
     pub reconcile_failures: IntCounterVec,
     pub metrics_failures: IntCounterVec,
@@ -19,12 +18,6 @@ pub struct Metrics {
 
 impl Default for Metrics {
     fn default() -> Self {
-        let dcu = IntCounterVec::new(
-            opts!("dmtr_consumed_dcus", "quantity of dcu consumed",),
-            &["project", "service", "service_type", "tenancy"],
-        )
-        .unwrap();
-
         let usage = IntCounterVec::new(
             opts!("usage", "Feature usage",),
             &["feature", "project", "resource_name", "tier"],
@@ -52,7 +45,6 @@ impl Default for Metrics {
         Metrics {
             reconcile_failures,
             usage,
-            dcu,
             metrics_failures,
         }
     }
@@ -60,7 +52,6 @@ impl Default for Metrics {
 
 impl Metrics {
     pub fn register(self, registry: &Registry) -> Result<Self, prometheus::Error> {
-        registry.register(Box::new(self.dcu.clone()))?;
         registry.register(Box::new(self.metrics_failures.clone()))?;
         registry.register(Box::new(self.reconcile_failures.clone()))?;
         registry.register(Box::new(self.usage.clone()))?;
@@ -78,18 +69,6 @@ impl Metrics {
         self.metrics_failures
             .with_label_values(&[e.metric_label().as_ref()])
             .inc()
-    }
-
-    pub fn count_dcu_consumed(&self, project: &str, network: &str, dcu: f64) {
-        let service = format!("{}-{}", OgmiosPort::kind(&()), network);
-        let service_type = format!("{}.{}", OgmiosPort::plural(&()), OgmiosPort::group(&()));
-        let tenancy = "proxy";
-
-        let dcu: u64 = dcu.ceil() as u64;
-
-        self.dcu
-            .with_label_values(&[project, &service, &service_type, tenancy])
-            .inc_by(dcu);
     }
 
     pub fn count_usage(&self, project: &str, resource_name: &str, tier: &str, value: f64) {
@@ -174,26 +153,9 @@ pub async fn run_metrics_collector(state: Arc<State>) {
                 if network_captures.is_none() {
                     continue;
                 }
-                let network_captures = network_captures.unwrap();
-                let network = network_captures.get(1).unwrap().as_str();
 
-                let dcu_per_second = config.dcu_per_second.get(network);
-                if dcu_per_second.is_none() {
-                    let error = Error::ConfigError(format!(
-                        "dcu_per_second not configured to {} network",
-                        network
-                    ));
-                    error!(error = error.to_string());
-                    state.metrics.metrics_failure(&error);
-                    continue;
-                }
-
-                let dcu_per_second = dcu_per_second.unwrap();
                 let total_exec_time = result.value * (interval as f64);
 
-                let dcu = total_exec_time * dcu_per_second;
-
-                state.metrics.count_dcu_consumed(project, network, dcu);
                 if let Some(tier) = result.metric.tier {
                     state
                         .metrics
