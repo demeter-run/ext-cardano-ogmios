@@ -34,6 +34,20 @@ use crate::limiter::limiter;
 use crate::utils::{full, get_header, ProxyResponse, DMTR_API_KEY};
 use crate::{Consumer, State};
 
+fn add_cors_headers<B>(response: &mut Response<B>) {
+    let headers = response.headers_mut();
+    headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    headers.insert(
+        "Access-Control-Allow-Methods",
+        HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"),
+    );
+    headers.insert(
+        "Access-Control-Allow-Headers",
+        HeaderValue::from_static("Content-Type, Authorization, X-Requested-With, dmtr-api-key"),
+    );
+    headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
+}
+
 pub async fn start(state: Arc<State>) {
     let addr_result = SocketAddr::from_str(&state.config.proxy_addr);
     if let Err(err) = addr_result {
@@ -97,14 +111,28 @@ async fn handle(
     state: Arc<State>,
 ) -> Result<ProxyResponse, hyper::Error> {
     match (hyper_req.method(), hyper_req.uri().path()) {
-        (&Method::GET, "/healthz") => handle_healthz(&state).await,
+        (&Method::OPTIONS, _) => {
+            let mut response = Response::builder()
+                .status(StatusCode::OK)
+                .body(full(""))
+                .unwrap();
+            add_cors_headers(&mut response);
+            Ok(response)
+        }
+        (&Method::GET, "/healthz") => {
+            let mut response = handle_healthz(&state).await?;
+            add_cors_headers(&mut response);
+            Ok(response)
+        }
         _ => {
             let proxy_req_result = ProxyRequest::new(&mut hyper_req, &state).await;
             if proxy_req_result.is_none() {
-                return Ok(Response::builder()
+                let mut response = Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .body(full("Unauthorized"))
-                    .unwrap());
+                    .unwrap();
+                add_cors_headers(&mut response);
+                return Ok(response);
             }
 
             let proxy_req = proxy_req_result.unwrap();
@@ -117,20 +145,26 @@ async fn handle(
                     match tiers.get(&proxy_req.consumer.tier) {
                         Some(tier) => {
                             if proxy_req.consumer.active_connections >= tier.max_connections {
-                                Ok(Response::builder()
+                                let mut response = Response::builder()
                                     .status(StatusCode::TOO_MANY_REQUESTS)
                                     .body(full("Connection limit exceeded"))
-                                    .unwrap())
+                                    .unwrap();
+                                add_cors_headers(&mut response);
+                                Ok(response)
                             } else {
                                 handle_websocket(hyper_req, &proxy_req, state.clone()).await
                             }
                         }
-                        None => Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body(full(
-                                "Invalid tier value. Contact support team for more information.",
-                            ))
-                            .unwrap()),
+                        None => {
+                            let mut response = Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(full(
+                                    "Invalid tier value. Contact support team for more information.",
+                                ))
+                                .unwrap();
+                            add_cors_headers(&mut response);
+                            Ok(response)
+                        }
                     }
                 }
             };
@@ -171,7 +205,8 @@ async fn handle_http(
         }
     });
 
-    let resp = sender.send_request(hyper_req).await?;
+    let mut resp = sender.send_request(hyper_req).await?;
+    add_cors_headers(&mut resp);
     Ok(resp.map(|b| b.boxed()))
 }
 
@@ -277,6 +312,7 @@ async fn handle_websocket(
     res.headers_mut().append(UPGRADE, websocket);
     res.headers_mut()
         .append(SEC_WEBSOCKET_ACCEPT, derived.unwrap().parse().unwrap());
+    add_cors_headers(&mut res);
 
     Ok(res)
 }
