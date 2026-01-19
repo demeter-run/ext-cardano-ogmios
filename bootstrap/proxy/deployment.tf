@@ -91,6 +91,26 @@ resource "kubernetes_deployment_v1" "ogmios_proxy" {
             value = "/certs/tls.key"
           }
 
+          env {
+            name  = "CORS_ALLOW_ORIGIN"
+            value = "*"
+          }
+
+          env {
+            name  = "CORS_ALLOW_METHODS"
+            value = "GET, POST, PUT, DELETE, OPTIONS"
+          }
+
+          env {
+            name  = "CORS_ALLOW_HEADERS"
+            value = "Content-Type, Authorization, X-Requested-With, dmtr-api-key, traceparent"
+          }
+
+          env {
+            name  = "CORS_MAX_AGE"
+            value = "86400"
+          }
+
           volume_mount {
             mount_path = "/certs"
             name       = "certs"

@@ -30,22 +30,29 @@ use tokio_tungstenite::{connect_async, WebSocketStream};
 use tracing::{error, info};
 use url::Url;
 
+use crate::config::Config;
 use crate::limiter::limiter;
 use crate::utils::{full, get_header, ProxyResponse, DMTR_API_KEY};
 use crate::{Consumer, State};
 
-fn add_cors_headers<B>(response: &mut Response<B>) {
+fn add_cors_headers<B>(response: &mut Response<B>, config: &Config) {
     let headers = response.headers_mut();
-    headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    headers.insert(
+        "Access-Control-Allow-Origin",
+        HeaderValue::from_str(&config.cors_allow_origin).unwrap(),
+    );
     headers.insert(
         "Access-Control-Allow-Methods",
-        HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"),
+        HeaderValue::from_str(&config.cors_allow_methods).unwrap(),
     );
     headers.insert(
         "Access-Control-Allow-Headers",
-        HeaderValue::from_static("Content-Type, Authorization, X-Requested-With, dmtr-api-key"),
+        HeaderValue::from_str(&config.cors_allow_headers).unwrap(),
     );
-    headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
+    headers.insert(
+        "Access-Control-Max-Age",
+        HeaderValue::from_str(&config.cors_max_age).unwrap(),
+    );
 }
 
 pub async fn start(state: Arc<State>) {
@@ -116,12 +123,12 @@ async fn handle(
                 .status(StatusCode::OK)
                 .body(full(""))
                 .unwrap();
-            add_cors_headers(&mut response);
+            add_cors_headers(&mut response, &state.config);
             Ok(response)
         }
         (&Method::GET, "/healthz") => {
             let mut response = handle_healthz(&state).await?;
-            add_cors_headers(&mut response);
+            add_cors_headers(&mut response, &state.config);
             Ok(response)
         }
         _ => {
@@ -131,13 +138,13 @@ async fn handle(
                     .status(StatusCode::UNAUTHORIZED)
                     .body(full("Unauthorized"))
                     .unwrap();
-                add_cors_headers(&mut response);
+                add_cors_headers(&mut response, &state.config);
                 return Ok(response);
             }
 
             let proxy_req = proxy_req_result.unwrap();
             let response_result = match proxy_req.protocol {
-                Protocol::Http => handle_http(hyper_req, &proxy_req).await,
+                Protocol::Http => handle_http(hyper_req, &proxy_req, &state).await,
                 Protocol::Websocket => {
                     // Before handling the websocket connection, check if consumer has available
                     // connections.
@@ -149,7 +156,7 @@ async fn handle(
                                     .status(StatusCode::TOO_MANY_REQUESTS)
                                     .body(full("Connection limit exceeded"))
                                     .unwrap();
-                                add_cors_headers(&mut response);
+                                add_cors_headers(&mut response, &state.config);
                                 Ok(response)
                             } else {
                                 handle_websocket(hyper_req, &proxy_req, state.clone()).await
@@ -162,7 +169,7 @@ async fn handle(
                                     "Invalid tier value. Contact support team for more information.",
                                 ))
                                 .unwrap();
-                            add_cors_headers(&mut response);
+                            add_cors_headers(&mut response, &state.config);
                             Ok(response)
                         }
                     }
@@ -189,6 +196,7 @@ async fn handle(
 async fn handle_http(
     hyper_req: Request<Incoming>,
     proxy_req: &ProxyRequest,
+    state: &State,
 ) -> Result<ProxyResponse, hyper::Error> {
     let stream = TcpStream::connect(&proxy_req.instance).await.unwrap();
     let io: TokioIo<TcpStream> = TokioIo::new(stream);
@@ -206,7 +214,7 @@ async fn handle_http(
     });
 
     let mut resp = sender.send_request(hyper_req).await?;
-    add_cors_headers(&mut resp);
+    add_cors_headers(&mut resp, &state.config);
     Ok(resp.map(|b| b.boxed()))
 }
 
@@ -223,7 +231,7 @@ async fn handle_websocket(
     let version = hyper_req.version();
 
     let proxy_req = proxy_req.clone();
-    let state = state.clone();
+    let config = state.config.clone();
 
     tokio::task::spawn(async move {
         match hyper::upgrade::on(&mut hyper_req).await {
@@ -312,7 +320,7 @@ async fn handle_websocket(
     res.headers_mut().append(UPGRADE, websocket);
     res.headers_mut()
         .append(SEC_WEBSOCKET_ACCEPT, derived.unwrap().parse().unwrap());
-    add_cors_headers(&mut res);
+    add_cors_headers(&mut res, &config);
 
     Ok(res)
 }
