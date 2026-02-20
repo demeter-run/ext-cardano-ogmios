@@ -23,6 +23,7 @@ module "ogmios_v1_feature" {
   api_key_salt       = var.api_key_salt
   dns_zone           = var.dns_zone
   resources          = var.operator_resources
+  tolerations        = var.operator_tolerations
 }
 
 module "ogmios_v1_proxies_blue" {

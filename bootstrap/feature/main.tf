@@ -60,3 +60,33 @@ variable "resources" {
     }
   }
 }
+
+variable "tolerations" {
+  description = "List of tolerations for the instance"
+  type = list(object({
+    effect   = string
+    key      = string
+    operator = string
+    value    = optional(string)
+  }))
+  default = [
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-profile"
+      operator = "Equal"
+      value    = "general-purpose"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/compute-arch"
+      operator = "Equal"
+      value    = "x86"
+    },
+    {
+      effect   = "NoSchedule"
+      key      = "demeter.run/availability-sla"
+      operator = "Equal"
+      value    = "consistent"
+    }
+  ]
+}
