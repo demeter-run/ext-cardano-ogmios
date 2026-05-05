@@ -18,6 +18,8 @@ The proxy exposes metrics about HTTP requests and WebSocket frames.
 | PROXY_ADDR      | "0.0.0.0:8100" |
 | PROMETHEUS_ADDR | "0.0.0.0:5000" |
 | OGMIOS_PORT     | -              |
+| OGMIOS_DNS      | cluster dns suffix for ogmios services |
+| HEALTH_NETWORK  | health upstream network, defaults to cardano-mainnet |
 | SSL_CRT_PATH    | file.crt       |
 | SSL_KEY_PATH    | file.key       |
 

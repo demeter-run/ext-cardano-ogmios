@@ -11,7 +11,7 @@ pub struct Config {
     pub ogmios_dns: String,
     pub ssl_crt_path: PathBuf,
     pub ssl_key_path: PathBuf,
-    pub network: String,
+    pub health_network: String,
 
     // Health endpoint
     pub health_poll_interval: std::time::Duration,
@@ -20,7 +20,6 @@ pub struct Config {
 impl Config {
     pub fn new() -> Self {
         Self {
-            network: env::var("NETWORK").expect("NETWORK must be set"),
             proxy_addr: env::var("PROXY_ADDR").expect("PROXY_ADDR must be set"),
             proxy_namespace: env::var("PROXY_NAMESPACE").unwrap_or("ftr-ogmios-v1".into()),
             proxy_tiers_path: env::var("PROXY_TIERS_PATH")
@@ -46,6 +45,7 @@ impl Config {
                 .parse()
                 .expect("OGMIOS_PORT must a number"),
             ogmios_dns: env::var("OGMIOS_DNS").expect("OGMIOS_DNS must be set"),
+            health_network: env::var("HEALTH_NETWORK").unwrap_or("cardano-mainnet".into()),
             health_poll_interval: env::var("HEALTH_POLL_INTERVAL")
                 .map(|v| {
                     Duration::from_secs(
@@ -57,10 +57,10 @@ impl Config {
         }
     }
 
-    pub fn instance(&self, version: &str) -> String {
+    pub fn instance(&self, network: &str, version: &str) -> String {
         format!(
             "ogmios-{}-{}.{}:{}",
-            self.network, version, self.ogmios_dns, self.ogmios_port
+            network, version, self.ogmios_dns, self.ogmios_port
         )
     }
 }

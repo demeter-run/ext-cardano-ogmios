@@ -339,12 +339,7 @@ impl ProxyRequest {
             .unwrap_or_default();
 
         let consumer = state.get_consumer(&token).await?;
-
-        if consumer.network != state.config.network {
-            return None;
-        }
-
-        let instance = state.config.instance(&consumer.version);
+        let instance = state.config.instance(&consumer.network, &consumer.version);
 
         Some(Self {
             namespace,
