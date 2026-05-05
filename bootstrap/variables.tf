@@ -135,6 +135,12 @@ EOT
   default     = {}
 }
 
+variable "proxy_green_extra_annotations" {
+  description = "Shared extra annotations for the green proxy service"
+  type        = map(string)
+  default     = {}
+}
+
 variable "proxy_green_environment" {
   type    = string
   default = "green"
@@ -156,6 +162,12 @@ and values are maps of extra annotations for the blue proxy service specific
 to that network.
 EOT
   type        = map(map(string))
+  default     = {}
+}
+
+variable "proxy_blue_extra_annotations" {
+  description = "Shared extra annotations for the blue proxy service"
+  type        = map(string)
   default     = {}
 }
 

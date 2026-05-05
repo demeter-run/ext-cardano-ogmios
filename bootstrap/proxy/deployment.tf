@@ -47,11 +47,6 @@ resource "kubernetes_deployment_v1" "ogmios_proxy" {
           }
 
           env {
-            name  = "NETWORK"
-            value = var.network
-          }
-
-          env {
             name  = "PROXY_NAMESPACE"
             value = var.namespace
           }
@@ -79,6 +74,11 @@ resource "kubernetes_deployment_v1" "ogmios_proxy" {
           env {
             name  = "OGMIOS_DNS"
             value = "ext-ogmios-m1.svc.cluster.local"
+          }
+
+          env {
+            name  = "HEALTH_NETWORK"
+            value = "cardano-mainnet"
           }
 
           env {

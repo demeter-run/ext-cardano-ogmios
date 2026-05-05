@@ -1,5 +1,5 @@
 locals {
-  config_map_name = var.environment != null ? "${var.environment}-proxy-${var.network}-config" : "proxy-${var.network}-config"
+  config_map_name = "${var.environment}-proxy-config"
 
   tiers = [
     {
