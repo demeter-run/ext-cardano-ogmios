@@ -138,6 +138,7 @@ resource "kubernetes_deployment_v1" "ogmios" {
           name              = "main"
           image             = local.image
           image_pull_policy = "IfNotPresent"
+          args              = local.container_args
 
           env {
             name  = "NETWORK"
