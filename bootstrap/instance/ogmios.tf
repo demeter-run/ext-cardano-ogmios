@@ -7,7 +7,11 @@ locals {
     "--node-config", "/config/config.json",
     "--host", "0.0.0.0"
   ]
-  container_args = var.ogmios_version == "5" ? local.default_args : concat(local.default_args, ["--include-cbor"])
+  container_args = var.ogmios_version == "5" ? local.default_args : concat(
+    local.default_args,
+    ["--include-cbor"],
+    var.ogmios_version == "7" ? ["--metadata-detailed-schema"] : []
+  )
 }
 
 resource "kubernetes_deployment_v1" "ogmios" {
