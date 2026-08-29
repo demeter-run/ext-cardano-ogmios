@@ -98,17 +98,30 @@ pub fn start(state: Arc<State>) {
     });
 }
 
+/// Parse a rendered `tiers.toml`.
+///
+/// `Ok(None)` means the file carried no `tiers` key — a warning, not an error.
+/// Extracted from `update_tiers` so the exact deserialization path the proxy
+/// uses at runtime can be tested against what Terraform renders.
+pub(crate) fn parse_tiers(contents: &str) -> Result<Option<Vec<Tier>>, Box<dyn Error>> {
+    let value: Value = toml::from_str(contents)?;
+
+    match value.get("tiers") {
+        None => Ok(None),
+        Some(tiers) => Ok(Some(serde_json::from_value::<Vec<Tier>>(tiers.to_owned())?)),
+    }
+}
+
 async fn update_tiers(state: Arc<State>) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(&state.config.proxy_tiers_path)?;
 
-    let value: Value = toml::from_str(&contents)?;
-    let tiers_value: Option<&Value> = value.get("tiers");
-    if tiers_value.is_none() {
-        warn!("tiers not configured on toml");
-        return Ok(());
-    }
-
-    let tiers = serde_json::from_value::<Vec<Tier>>(tiers_value.unwrap().to_owned())?;
+    let tiers = match parse_tiers(&contents)? {
+        Some(tiers) => tiers,
+        None => {
+            warn!("tiers not configured on toml");
+            return Ok(());
+        }
+    };
 
     *state.tiers.write().await = tiers
         .into_iter()
@@ -127,5 +140,56 @@ fn runtime_handle() -> Handle {
             let rt = Runtime::new().unwrap();
             rt.handle().clone()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Byte-identical to what `bootstrap/proxy/proxy-config.toml.tftpl` renders
+    /// for tier 3. This is the only thing standing between a Terraform template
+    /// edit and a proxy that cannot load its tiers at runtime.
+    const RENDERED_TIER_3: &str = "[[tiers]]\nname = \"3\"\nmax_connections = 450\n[[tiers.rates]]\ninterval = \"1m\"\nlimit = 1500\n";
+
+    fn one_rate(interval: &str) -> String {
+        format!("[[tiers]]\nname = \"t\"\nmax_connections = 1\n[[tiers.rates]]\ninterval = \"{interval}\"\nlimit = 1\n")
+    }
+
+    #[test]
+    fn the_rendered_tier_config_parses() {
+        let tiers = parse_tiers(RENDERED_TIER_3)
+            .expect("rendered config failed to parse")
+            .expect("rendered config had no `tiers` key");
+
+        assert_eq!(tiers.len(), 1);
+        assert_eq!(tiers[0].name, "3");
+        assert_eq!(tiers[0].max_connections, 450);
+        assert_eq!(tiers[0].rates.len(), 1);
+        assert_eq!(tiers[0].rates[0].limit, 1500);
+        assert_eq!(tiers[0].rates[0].interval, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn every_documented_interval_unit_parses() {
+        for (input, expected) in [
+            ("30s", Duration::from_secs(30)),
+            ("1m", Duration::from_secs(60)),
+            ("1h", Duration::from_secs(60 * 60)),
+            ("1d", Duration::from_secs(24 * 60 * 60)),
+        ] {
+            let tiers = parse_tiers(&one_rate(input)).unwrap().unwrap();
+            assert_eq!(tiers[0].rates[0].interval, expected, "unit {input}");
+        }
+    }
+
+    #[test]
+    fn a_malformed_interval_is_an_error_not_a_panic() {
+        assert!(parse_tiers(&one_rate("nope")).is_err());
+    }
+
+    #[test]
+    fn a_file_without_a_tiers_key_is_not_an_error() {
+        assert!(parse_tiers("something_else = 1\n").unwrap().is_none());
     }
 }
