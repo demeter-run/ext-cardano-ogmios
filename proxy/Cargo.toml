@@ -34,3 +34,9 @@ serde_json = "1.0.114"
 toml = "0.8.10"
 notify = "6.1.1"
 tower-http = { version = "0.5.0", features = ["cors"] }
+
+[dev-dependencies]
+# `test-util` is NOT part of tokio's `full` feature set; without it
+# `tokio::time::pause` / `advance` and `#[tokio::test(start_paused = true)]`
+# do not exist. The limiter tests are written against virtual time.
+tokio = { version = "1.35.1", features = ["full", "test-util"] }
