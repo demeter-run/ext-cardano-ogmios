@@ -32,11 +32,21 @@ async fn has_limiter(state: &State, consumer: &Consumer) -> bool {
 ///
 /// Extracted so the shipped configuration is the thing under test — a test that
 /// rebuilds the builder itself would pin a copy that can silently drift.
+///
+/// `max` is set explicitly. Left unset, leaky-bucket defaults it to
+/// `10 * max(refill, initial)` — unreachable while the 1.0.1 refill bug meant
+/// the bucket never accumulated, but live now that it does. Ten intervals of
+/// banked budget dischargeable at once is not a burst we can size: the backend
+/// ceiling is still unmeasured (plans/ogmios-throughput-profiling.md), the
+/// bucket is shared across all of a consumer's connections, and tier 3 permits
+/// 450 of them. Two intervals allows a short catch-up after idle without
+/// unbounded accumulation.
 pub(crate) fn build_rate_limiter(rate: &TierRate) -> RateLimiter {
     RateLimiter::builder()
         .initial(rate.limit)
         .interval(rate.interval)
         .refill(rate.limit)
+        .max(rate.limit * 2)
         .build()
 }
 
