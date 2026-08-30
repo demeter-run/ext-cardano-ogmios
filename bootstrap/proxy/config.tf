@@ -38,7 +38,7 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = 1500
+          "limit"    = 6000
         }
       ]
     }
