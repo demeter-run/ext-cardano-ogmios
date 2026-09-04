@@ -152,6 +152,12 @@ mod tests {
     /// edit and a proxy that cannot load its tiers at runtime.
     const RENDERED_TIER_3: &str = "[[tiers]]\nname = \"3\"\nmax_connections = 450\n[[tiers.rates]]\ninterval = \"1m\"\nlimit = 1500\n";
 
+    /// Byte-identical to what the same template renders for tiers 3 and 4
+    /// together. Tier 4 is the internal enterprise tier: it takes tier 3's
+    /// message rate and only its connection cap is its own, so the two are
+    /// pinned here as a pair rather than separately.
+    const RENDERED_TIERS_3_AND_4: &str = "[[tiers]]\nname = \"3\"\nmax_connections = 450\n[[tiers.rates]]\ninterval = \"1m\"\nlimit = 1500\n[[tiers]]\nname = \"4\"\nmax_connections = 450\n[[tiers.rates]]\ninterval = \"1m\"\nlimit = 1500\n";
+
     fn one_rate(interval: &str) -> String {
         format!("[[tiers]]\nname = \"t\"\nmax_connections = 1\n[[tiers.rates]]\ninterval = \"{interval}\"\nlimit = 1\n")
     }
@@ -168,6 +174,33 @@ mod tests {
         assert_eq!(tiers[0].rates.len(), 1);
         assert_eq!(tiers[0].rates[0].limit, 1500);
         assert_eq!(tiers[0].rates[0].interval, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn the_enterprise_tier_parses_and_carries_tier_3s_message_rate() {
+        let tiers = parse_tiers(RENDERED_TIERS_3_AND_4)
+            .expect("rendered config failed to parse")
+            .expect("rendered config had no `tiers` key");
+
+        let by_name = |name: &str| {
+            tiers
+                .iter()
+                .find(|tier| tier.name == name)
+                .unwrap_or_else(|| panic!("tier {name} missing from the rendered config"))
+        };
+        let tier_3 = by_name("3");
+        let tier_4 = by_name("4");
+
+        assert_eq!(tier_4.max_connections, 450);
+        assert_eq!(
+            tier_4.rates.len(),
+            tier_3.rates.len(),
+            "tier 4 must carry tier 3's rates"
+        );
+        for (four, three) in tier_4.rates.iter().zip(&tier_3.rates) {
+            assert_eq!(four.limit, three.limit);
+            assert_eq!(four.interval, three.interval);
+        }
     }
 
     #[test]
