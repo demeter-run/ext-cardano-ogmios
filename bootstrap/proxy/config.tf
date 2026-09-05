@@ -3,6 +3,11 @@ locals {
 
   # The tiers a customer can be on by their own action. Their connection caps
   # are per proxy replica, not per deployment.
+  #
+  # Message rates are the unified public throughput ladder -- 5, 20, 100 and
+  # 300 messages per second for tiers 0, 1, 2 and 3 -- expressed over the
+  # proxy's one-minute interval, so `limit` is the per-second figure times 60.
+  # The ladder is one source of truth: a tier is retuned here and nowhere else.
   self_serve_tiers = [
     {
       "name"            = "0",
@@ -10,7 +15,7 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = 500
+          "limit"    = 300
         }
       ]
     },
@@ -20,7 +25,7 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = 500
+          "limit"    = 1200
         }
       ]
     },
@@ -30,7 +35,7 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = 500
+          "limit"    = 6000
         }
       ]
     },
@@ -40,7 +45,7 @@ locals {
       "rates" = [
         {
           "interval" = "1m",
-          "limit"    = 1500
+          "limit"    = 18000
         }
       ]
     }
