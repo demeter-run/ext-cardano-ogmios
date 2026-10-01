@@ -92,6 +92,12 @@ module "ogmios_instances" {
   ogmios_version    = each.value.ogmios_version
   replicas          = each.value.replicas
   image_pull_secret = each.value.image_pull_secret
+
+  node_balancer            = each.value.node_balancer
+  node_srv_record          = each.value.node_srv_record
+  node_max_conn_per_server = each.value.node_max_conn_per_server
+  spread                   = each.value.spread
+
   tolerations = coalesce(each.value.tolerations, [
     {
       effect   = "NoSchedule"

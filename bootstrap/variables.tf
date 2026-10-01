@@ -237,6 +237,11 @@ variable "instances" {
     ogmios_version    = string
     replicas          = number
     image_pull_secret = optional(string)
+    # Node balancing and pod placement; see the instance module's variables.
+    node_balancer            = optional(string, "socat")
+    node_srv_record          = optional(string)
+    node_max_conn_per_server = optional(number, 200)
+    spread                   = optional(bool, false)
     resources = optional(object({
       limits = object({
         cpu    = string
