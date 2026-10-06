@@ -10,6 +10,7 @@ use tokio::net::TcpListener;
 use tracing::{error, info, instrument};
 
 use crate::proxy::ProxyRequest;
+use crate::rpc::{is_heavy, Classification, Transport};
 use crate::utils::{full, ProxyResponse};
 use crate::State;
 
@@ -19,6 +20,9 @@ pub struct Metrics {
     pub ws_total_frame: IntCounterVec,
     pub ws_total_connection: IntGaugeVec,
     pub http_total_request: IntCounterVec,
+    pub rpc_requests: IntCounterVec,
+    pub rpc_consumer_requests: IntCounterVec,
+    pub rpc_consumer_heavy_requests: IntCounterVec,
 }
 
 impl Metrics {
@@ -52,15 +56,56 @@ impl Metrics {
         )
         .unwrap();
 
+        // Request classification. These avoid the label names Prometheus
+        // target labels already use (namespace, instance, job, pod, container,
+        // endpoint), and only the low-cardinality families carry `consumer`.
+        let rpc_requests = IntCounterVec::new(
+            opts!(
+                "ogmios_proxy_rpc_requests_total",
+                "client JSON-RPC messages by method and shape",
+            ),
+            &[
+                "network",
+                "version",
+                "tier",
+                "transport",
+                "method",
+                "shape",
+                "heavy",
+            ],
+        )?;
+
+        let rpc_consumer_requests = IntCounterVec::new(
+            opts!(
+                "ogmios_proxy_rpc_consumer_requests_total",
+                "client JSON-RPC messages by consumer and method family",
+            ),
+            &["consumer", "network", "version", "family"],
+        )?;
+
+        let rpc_consumer_heavy_requests = IntCounterVec::new(
+            opts!(
+                "ogmios_proxy_rpc_consumer_heavy_requests_total",
+                "client JSON-RPC messages of a heavy class by consumer",
+            ),
+            &["consumer", "network", "version", "method", "shape"],
+        )?;
+
         registry.register(Box::new(ws_total_frame.clone()))?;
         registry.register(Box::new(ws_total_connection.clone()))?;
         registry.register(Box::new(http_total_request.clone()))?;
+        registry.register(Box::new(rpc_requests.clone()))?;
+        registry.register(Box::new(rpc_consumer_requests.clone()))?;
+        registry.register(Box::new(rpc_consumer_heavy_requests.clone()))?;
 
         Ok(Metrics {
             registry,
             ws_total_frame,
             ws_total_connection,
             http_total_request,
+            rpc_requests,
+            rpc_consumer_requests,
+            rpc_consumer_heavy_requests,
         })
     }
 
@@ -116,6 +161,49 @@ impl Metrics {
                 &proxy_req.consumer.tier,
             ])
             .inc()
+    }
+
+    /// Counts one classified client message. `consumer` is the consumer's
+    /// label value, resolved once per connection or request by the caller.
+    pub fn count_rpc_request(
+        &self,
+        proxy_req: &ProxyRequest,
+        consumer: &str,
+        transport: Transport,
+        classification: &Classification,
+    ) {
+        let network = proxy_req.consumer.network.as_str();
+        let version = proxy_req.consumer.version.as_str();
+        let method = classification.method.as_str();
+        let shape = classification.shape.as_str();
+        let heavy = is_heavy(classification);
+
+        self.rpc_requests
+            .with_label_values(&[
+                network,
+                version,
+                &proxy_req.consumer.tier,
+                transport.as_str(),
+                method,
+                shape,
+                if heavy { "true" } else { "false" },
+            ])
+            .inc();
+
+        self.rpc_consumer_requests
+            .with_label_values(&[
+                consumer,
+                network,
+                version,
+                classification.method.family().as_str(),
+            ])
+            .inc();
+
+        if heavy {
+            self.rpc_consumer_heavy_requests
+                .with_label_values(&[consumer, network, version, method, shape])
+                .inc();
+        }
     }
 }
 
@@ -186,5 +274,79 @@ pub async fn start(state: Arc<State>) {
                 error!(error = err.to_string(), "failed metrics server connection");
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proxy::Protocol;
+    use crate::rpc::classify;
+    use crate::Consumer;
+
+    fn exposition(metrics: &Metrics) -> String {
+        let mut buffer = vec![];
+        TextEncoder::new()
+            .encode(&metrics.metrics_collected(), &mut buffer)
+            .unwrap();
+        String::from_utf8(buffer).unwrap()
+    }
+
+    fn proxy_request() -> ProxyRequest {
+        ProxyRequest {
+            namespace: "ftr-ogmios-v1".into(),
+            host: "key.cardano-preprod-v6.ogmios-m1.demeter.run".into(),
+            instance: "ogmios-cardano-preprod-6".into(),
+            consumer: Consumer {
+                namespace: "prj-a".into(),
+                port_name: "port-b".into(),
+                tier: "1".into(),
+                network: "cardano-preprod".into(),
+                version: "6".into(),
+                ..Default::default()
+            },
+            protocol: Protocol::Websocket,
+        }
+    }
+
+    #[test]
+    fn rpc_families_have_no_series_until_a_message_is_counted() {
+        let metrics = Metrics::try_new(Registry::default()).unwrap();
+        assert!(!exposition(&metrics).contains("ogmios_proxy_rpc"));
+    }
+
+    #[test]
+    fn a_heavy_message_is_counted_in_all_three_families() {
+        let metrics = Metrics::try_new(Registry::default()).unwrap();
+        let utxo = classify(br#"{"method":"queryLedgerState/utxo","params":{"addresses":["a"]}}"#);
+        metrics.count_rpc_request(
+            &proxy_request(),
+            "prj-a.port-b",
+            Transport::Websocket,
+            &utxo,
+        );
+
+        let text = exposition(&metrics);
+        assert!(text.contains(r#"ogmios_proxy_rpc_requests_total{heavy="true",method="queryLedgerState/utxo",network="cardano-preprod",shape="addresses/1",tier="1",transport="websocket",version="6"} 1"#), "{text}");
+        assert!(text.contains(r#"ogmios_proxy_rpc_consumer_requests_total{consumer="prj-a.port-b",family="ledger-state",network="cardano-preprod",version="6"} 1"#), "{text}");
+        assert!(text.contains(r#"ogmios_proxy_rpc_consumer_heavy_requests_total{consumer="prj-a.port-b",method="queryLedgerState/utxo",network="cardano-preprod",shape="addresses/1",version="6"} 1"#), "{text}");
+    }
+
+    #[test]
+    fn a_light_message_has_no_heavy_series() {
+        let metrics = Metrics::try_new(Registry::default()).unwrap();
+        let tip = classify(br#"{"method":"queryNetwork/tip"}"#);
+        metrics.count_rpc_request(&proxy_request(), "prj-a.port-b", Transport::Http, &tip);
+
+        let text = exposition(&metrics);
+        assert!(
+            text.contains(r#"heavy="false",method="queryNetwork/tip""#),
+            "{text}"
+        );
+        assert!(text.contains(r#"transport="http""#), "{text}");
+        assert!(
+            !text.contains("ogmios_proxy_rpc_consumer_heavy_requests_total{"),
+            "{text}"
+        );
     }
 }
