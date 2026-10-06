@@ -92,6 +92,11 @@ resource "kubernetes_deployment_v1" "ogmios_proxy" {
           }
 
           env {
+            name  = "RPC_TELEMETRY_NETWORKS"
+            value = join(",", var.rpc_telemetry_networks)
+          }
+
+          env {
             name  = "CORS_ALLOW_ORIGIN"
             value = "*"
           }

@@ -176,6 +176,16 @@ variable "proxy_blue_environment" {
   default = "blue"
 }
 
+variable "proxy_rpc_telemetry_networks" {
+  description = <<EOT
+Networks whose client JSON-RPC messages the proxies classify and count, matched
+exactly against the consumer's network ("*" enables every network). Empty
+disables request telemetry and its recording rules.
+EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "proxy_resources" {
   type = object({
     limits = object({

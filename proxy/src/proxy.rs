@@ -16,6 +16,7 @@ use rustls::ServerConfig;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::error::Error;
 use std::fmt::Display;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -30,8 +31,10 @@ use tokio_tungstenite::{connect_async, WebSocketStream};
 use tracing::{error, info};
 use url::Url;
 
+use crate::body::{buffer_body, ReplayBody};
 use crate::config::Config;
 use crate::limiter::limiter;
+use crate::rpc::{self, Classification, Transport, OVERSIZE_BYTES};
 use crate::utils::{full, get_header, ProxyResponse, DMTR_API_KEY};
 use crate::{Consumer, State};
 
@@ -198,6 +201,30 @@ async fn handle_http(
     proxy_req: &ProxyRequest,
     state: &State,
 ) -> Result<ProxyResponse, hyper::Error> {
+    if hyper_req.method() == Method::POST
+        && state
+            .config
+            .rpc_telemetry_networks
+            .enabled_for(&proxy_req.consumer.network)
+    {
+        let mut response = forward_classified(
+            hyper_req,
+            |classification| {
+                let consumer = proxy_req.consumer.to_string();
+                state.metrics.count_rpc_request(
+                    proxy_req,
+                    &consumer,
+                    Transport::Http,
+                    classification,
+                )
+            },
+            |req| send_upstream(req, &proxy_req.instance),
+        )
+        .await;
+        add_cors_headers(&mut response, &state.config);
+        return Ok(response);
+    }
+
     let stream = TcpStream::connect(&proxy_req.instance).await.unwrap();
     let io: TokioIo<TcpStream> = TokioIo::new(stream);
 
@@ -216,6 +243,81 @@ async fn handle_http(
     let mut resp = sender.send_request(hyper_req).await?;
     add_cors_headers(&mut resp, &state.config);
     Ok(resp.map(|b| b.boxed()))
+}
+
+/// Buffers a POST body far enough to classify it, counts it, and forwards the
+/// identical bytes with the headers as received. A client that aborts before
+/// the body is classified gets a `400` and the upstream is never contacted.
+async fn forward_classified<B, F, Fut>(
+    hyper_req: Request<B>,
+    count: impl FnOnce(&Classification),
+    upstream: F,
+) -> ProxyResponse
+where
+    B: hyper::body::Body<Data = bytes::Bytes> + Unpin,
+    B::Error: Display,
+    F: FnOnce(Request<ReplayBody<B>>) -> Fut,
+    Fut: Future<Output = ProxyResponse>,
+{
+    let (parts, body) = hyper_req.into_parts();
+    let (prefix, body) = match buffer_body(body, OVERSIZE_BYTES).await {
+        Ok(buffered) => buffered,
+        Err(err) => {
+            error!(error = err.to_string(), "client aborted the request body");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(full("Incomplete request body"))
+                .unwrap();
+        }
+    };
+
+    count(&rpc::classify(&prefix));
+
+    upstream(Request::from_parts(parts, body)).await
+}
+
+/// Sends a request to the instance and answers any failure itself, so that
+/// the classified path never surfaces an error to `handle`.
+async fn send_upstream(req: Request<ReplayBody<Incoming>>, instance: &str) -> ProxyResponse {
+    let failure = |status: StatusCode, err: &dyn Display| {
+        error!(
+            error = err.to_string(),
+            "fail to forward request to instance"
+        );
+        Response::builder()
+            .status(status)
+            .body(full(status.canonical_reason().unwrap_or_default()))
+            .unwrap()
+    };
+
+    let stream = match TcpStream::connect(instance).await {
+        Ok(stream) => stream,
+        Err(err) => return failure(StatusCode::BAD_GATEWAY, &err),
+    };
+    let io: TokioIo<TcpStream> = TokioIo::new(stream);
+
+    let (mut sender, conn) = match http1_client::Builder::new()
+        .preserve_header_case(true)
+        .title_case_headers(true)
+        .handshake(io)
+        .await
+    {
+        Ok(handshake) => handshake,
+        Err(err) => return failure(StatusCode::BAD_GATEWAY, &err),
+    };
+
+    tokio::task::spawn(async move {
+        if let Err(err) = conn.await {
+            println!("Connection failed: {:?}", err);
+        }
+    });
+
+    match sender.send_request(req).await {
+        Ok(resp) => resp.map(|b| b.boxed()),
+        // A user error here is the client's body failing mid-stream.
+        Err(err) if err.is_user() => failure(StatusCode::BAD_REQUEST, &err),
+        Err(err) => failure(StatusCode::BAD_GATEWAY, &err),
+    }
 }
 
 async fn handle_websocket(
@@ -263,10 +365,30 @@ async fn handle_websocket(
                     active_connections, "client connected"
                 );
 
+                // Decided once per connection; the disabled path is this one
+                // branch per message.
+                let rpc_consumer = state
+                    .config
+                    .rpc_telemetry_networks
+                    .enabled_for(&proxy_req.consumer.network)
+                    .then(|| proxy_req.consumer.to_string());
+
                 let client_in = async {
                     while let Some(result) = client_incoming.next().await {
                         match result {
                             Ok(data) => {
+                                // Counted before the limiter so that stalled
+                                // messages still show as demand.
+                                if let Some(consumer) = &rpc_consumer {
+                                    if let Some(classification) = rpc::classify_message(&data) {
+                                        state.metrics.count_rpc_request(
+                                            &proxy_req,
+                                            consumer,
+                                            Transport::Websocket,
+                                            &classification,
+                                        );
+                                    }
+                                }
                                 if let Err(err) = limiter(state.clone(), &proxy_req.consumer).await
                                 {
                                     error!(error = err.to_string(), "Failed to run limiter.");
@@ -419,4 +541,80 @@ fn load_private_key(path: &PathBuf) -> io::Result<PrivateKeyDer<'static>> {
     let key_file = fs::File::open(path)?;
     let mut reader = io::BufReader::new(key_file);
     rustls_pemfile::private_key(&mut reader).map(|key| key.unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use bytes::Bytes;
+    use futures_util::stream;
+    use http_body_util::StreamBody;
+    use hyper::body::Frame;
+
+    use super::*;
+
+    type Chunk = Result<Frame<Bytes>, &'static str>;
+
+    fn post(chunks: Vec<Chunk>) -> Request<StreamBody<stream::Iter<std::vec::IntoIter<Chunk>>>> {
+        Request::post("/")
+            .header("content-type", "application/json")
+            .body(StreamBody::new(stream::iter(chunks)))
+            .unwrap()
+    }
+
+    fn data(bytes: &'static [u8]) -> Chunk {
+        Ok(Frame::data(Bytes::from_static(bytes)))
+    }
+
+    #[tokio::test]
+    async fn a_client_abort_is_answered_without_contacting_the_upstream() {
+        let counted = Cell::new(false);
+        let contacted = Cell::new(false);
+
+        let response = forward_classified(
+            post(vec![data(b"{\"method\":"), Err("connection reset")]),
+            |_| counted.set(true),
+            |_| {
+                contacted.set(true);
+                async { Response::new(full("")) }
+            },
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(!counted.get());
+        assert!(!contacted.get());
+    }
+
+    #[tokio::test]
+    async fn a_classified_post_is_forwarded_unchanged() {
+        let mut counted = None;
+
+        let response = forward_classified(
+            post(vec![
+                data(b"{\"jsonrpc\":\"2.0\",\"method\":"),
+                data(b"\"queryNetwork/tip\"}"),
+            ]),
+            |classification| counted = Some(*classification),
+            |req| async move {
+                assert_eq!(req.headers()["content-type"], "application/json");
+                let body = req.into_body().collect().await.unwrap().to_bytes();
+                assert_eq!(
+                    &body[..],
+                    b"{\"jsonrpc\":\"2.0\",\"method\":\"queryNetwork/tip\"}"
+                );
+                Response::new(full("ok"))
+            },
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let counted = counted.unwrap();
+        assert_eq!(counted.method, rpc::Method::QueryNetworkTip);
+        assert_eq!(
+            counted.bytes,
+            r#"{"jsonrpc":"2.0","method":"queryNetwork/tip"}"#.len()
+        );
+    }
 }
