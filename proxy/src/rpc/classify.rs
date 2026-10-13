@@ -134,7 +134,7 @@ fn classify_oversize(after_key: &[u8], bytes: usize) -> Classification {
 }
 
 /// Reads `<ws>:<ws>"<escape-free string>"` and returns the string.
-fn scan_method(after_key: &[u8]) -> Option<&str> {
+pub(super) fn scan_method(after_key: &[u8]) -> Option<&str> {
     let rest = skip_whitespace(after_key);
     let rest = skip_whitespace(rest.strip_prefix(b":")?);
     let rest = rest.strip_prefix(b"\"")?;
@@ -145,7 +145,7 @@ fn scan_method(after_key: &[u8]) -> Option<&str> {
     std::str::from_utf8(&rest[..end]).ok()
 }
 
-fn skip_whitespace(bytes: &[u8]) -> &[u8] {
+pub(super) fn skip_whitespace(bytes: &[u8]) -> &[u8] {
     let start = bytes
         .iter()
         .position(|b| !matches!(b, b' ' | b'\t' | b'\n' | b'\r'))

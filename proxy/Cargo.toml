@@ -46,3 +46,7 @@ criterion = "0.5"
 [[bench]]
 name = "classify"
 harness = false
+
+[[bench]]
+name = "correlate"
+harness = false
