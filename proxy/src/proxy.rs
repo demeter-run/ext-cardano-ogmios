@@ -32,6 +32,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::limiter::limiter;
+use crate::metrics::Metrics;
 use crate::utils::{full, get_header, ProxyResponse, DMTR_API_KEY};
 use crate::{Consumer, State};
 
@@ -151,7 +152,10 @@ async fn handle(
                     let tiers = state.tiers.read().await.clone();
                     match tiers.get(&proxy_req.consumer.tier) {
                         Some(tier) => {
-                            if proxy_req.consumer.active_connections >= tier.max_connections {
+                            if !state
+                                .connections
+                                .has_capacity(&proxy_req.consumer.key, tier.max_connections)
+                            {
                                 let mut response = Response::builder()
                                     .status(StatusCode::TOO_MANY_REQUESTS)
                                     .body(full("Connection limit exceeded"))
@@ -251,13 +255,12 @@ async fn handle_websocket(
                 let (instance_stream, _) = connection_result.unwrap();
                 let (mut instance_outgoing, instance_incoming) = instance_stream.split();
 
-                state.metrics.inc_ws_total_connection(&proxy_req);
-                proxy_req.consumer.inc_connections(state.clone()).await;
+                let connection = state.connections.open(
+                    &proxy_req.consumer.key,
+                    Metrics::connection_labels(&proxy_req),
+                );
 
-                let active_connections = proxy_req
-                    .consumer
-                    .get_active_connections(state.clone())
-                    .await;
+                let active_connections = state.connections.count(&proxy_req.consumer.key);
                 info!(
                     consumer = proxy_req.consumer.to_string(),
                     active_connections, "client connected"
@@ -295,13 +298,9 @@ async fn handle_websocket(
 
                 select(client_in, instance_in).await;
 
-                state.metrics.dec_ws_total_connection(&proxy_req);
-                proxy_req.consumer.dec_connections(state.clone()).await;
+                drop(connection);
 
-                let active_connections = proxy_req
-                    .consumer
-                    .get_active_connections(state.clone())
-                    .await;
+                let active_connections = state.connections.count(&proxy_req.consumer.key);
                 info!(
                     consumer = proxy_req.consumer.to_string(),
                     active_connections, "client disconnected"

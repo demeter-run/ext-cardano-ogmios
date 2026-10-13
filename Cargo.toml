@@ -4,3 +4,10 @@ members = [
     "operator",
     "proxy",
 ]
+
+# A wrapped counter fails silently: the 2026-09-07 connection-limit lockout was
+# `0 - 1` on a `usize` in a release build. A panic restarts the pod with a stack
+# trace instead. Profiles are only read from the workspace root, so it is set
+# here, scoped to the proxy.
+[profile.release.package.proxy]
+overflow-checks = true

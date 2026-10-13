@@ -5,10 +5,11 @@ use std::{net::SocketAddr, str::FromStr};
 use hyper::server::conn::http1 as http1_server;
 use hyper::{body::Incoming, service::service_fn, Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
-use prometheus::{opts, Encoder, IntCounterVec, IntGaugeVec, Registry, TextEncoder};
+use prometheus::{opts, Encoder, IntCounterVec, Registry, TextEncoder};
 use tokio::net::TcpListener;
 use tracing::{error, info, instrument};
 
+use crate::connections::{ConnectionLabels, Connections, ConnectionsGauge};
 use crate::proxy::ProxyRequest;
 use crate::utils::{full, ProxyResponse};
 use crate::State;
@@ -17,23 +18,16 @@ use crate::State;
 pub struct Metrics {
     registry: Registry,
     pub ws_total_frame: IntCounterVec,
-    pub ws_total_connection: IntGaugeVec,
     pub http_total_request: IntCounterVec,
 }
 
 impl Metrics {
-    pub fn try_new(registry: Registry) -> Result<Self, Box<dyn Error>> {
+    pub fn try_new(
+        registry: Registry,
+        connections: Arc<Connections>,
+    ) -> Result<Self, Box<dyn Error>> {
         let ws_total_frame = IntCounterVec::new(
             opts!("ogmios_proxy_ws_total_frame", "total of websocket frame",),
-            &["namespace", "instance", "route", "consumer", "tier"],
-        )
-        .unwrap();
-
-        let ws_total_connection = IntGaugeVec::new(
-            opts!(
-                "ogmios_proxy_total_connections",
-                "total of websocket connection",
-            ),
             &["namespace", "instance", "route", "consumer", "tier"],
         )
         .unwrap();
@@ -53,13 +47,14 @@ impl Metrics {
         .unwrap();
 
         registry.register(Box::new(ws_total_frame.clone()))?;
-        registry.register(Box::new(ws_total_connection.clone()))?;
+        // `ogmios_proxy_total_connections` is read from the same bookkeeping as
+        // the connection cap, never maintained alongside it.
+        registry.register(Box::new(ConnectionsGauge::new(connections)))?;
         registry.register(Box::new(http_total_request.clone()))?;
 
         Ok(Metrics {
             registry,
             ws_total_frame,
-            ws_total_connection,
             http_total_request,
         })
     }
@@ -80,28 +75,16 @@ impl Metrics {
             .inc()
     }
 
-    pub fn inc_ws_total_connection(&self, proxy_req: &ProxyRequest) {
-        self.ws_total_connection
-            .with_label_values(&[
-                &proxy_req.namespace,
-                &proxy_req.instance,
-                &proxy_req.host,
-                &proxy_req.consumer.to_string(),
-                &proxy_req.consumer.tier,
-            ])
-            .inc()
-    }
-
-    pub fn dec_ws_total_connection(&self, proxy_req: &ProxyRequest) {
-        self.ws_total_connection
-            .with_label_values(&[
-                &proxy_req.namespace,
-                &proxy_req.instance,
-                &proxy_req.host,
-                &proxy_req.consumer.to_string(),
-                &proxy_req.consumer.tier,
-            ])
-            .dec()
+    /// Label values a WebSocket connection is counted under in
+    /// `ogmios_proxy_total_connections`.
+    pub fn connection_labels(proxy_req: &ProxyRequest) -> ConnectionLabels {
+        [
+            proxy_req.namespace.clone(),
+            proxy_req.instance.clone(),
+            proxy_req.host.clone(),
+            proxy_req.consumer.to_string(),
+            proxy_req.consumer.tier.clone(),
+        ]
     }
 
     pub fn count_http_total_request(&self, proxy_req: &ProxyRequest, status_code: StatusCode) {
