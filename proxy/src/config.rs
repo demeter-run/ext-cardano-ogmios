@@ -21,6 +21,9 @@ pub struct Config {
     pub cors_allow_methods: String,
     pub cors_allow_headers: String,
     pub cors_max_age: String,
+
+    // Request classification telemetry
+    pub rpc_telemetry_networks: RpcTelemetryNetworks,
 }
 
 impl Config {
@@ -66,6 +69,9 @@ impl Config {
             cors_allow_headers: env::var("CORS_ALLOW_HEADERS")
                 .unwrap_or("Content-Type, Authorization, X-Requested-With, dmtr-api-key".into()),
             cors_max_age: env::var("CORS_MAX_AGE").unwrap_or("86400".into()),
+            rpc_telemetry_networks: RpcTelemetryNetworks::parse(
+                env::var("RPC_TELEMETRY_NETWORKS").ok().as_deref(),
+            ),
         }
     }
 
@@ -74,5 +80,88 @@ impl Config {
             "ogmios-{}-{}.{}:{}",
             network, version, self.ogmios_dns, self.ogmios_port
         )
+    }
+}
+
+/// The networks whose client messages are classified and counted, from
+/// `RPC_TELEMETRY_NETWORKS`: unset or empty disables telemetry, `*` enables
+/// every network, and otherwise it is a comma list of exact network names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RpcTelemetryNetworks {
+    Disabled,
+    All,
+    Only(Vec<String>),
+}
+
+impl RpcTelemetryNetworks {
+    pub fn parse(value: Option<&str>) -> Self {
+        let Some(value) = value.map(str::trim) else {
+            return Self::Disabled;
+        };
+        if value == "*" {
+            return Self::All;
+        }
+        let networks: Vec<String> = value
+            .split(',')
+            .map(str::trim)
+            .filter(|network| !network.is_empty())
+            .map(String::from)
+            .collect();
+        if networks.is_empty() {
+            Self::Disabled
+        } else {
+            Self::Only(networks)
+        }
+    }
+
+    pub fn enabled_for(&self, network: &str) -> bool {
+        match self {
+            Self::Disabled => false,
+            Self::All => true,
+            Self::Only(networks) => networks.iter().any(|enabled| enabled == network),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RpcTelemetryNetworks;
+
+    #[test]
+    fn rpc_telemetry_unset_is_disabled() {
+        let networks = RpcTelemetryNetworks::parse(None);
+        assert_eq!(networks, RpcTelemetryNetworks::Disabled);
+        assert!(!networks.enabled_for("cardano-mainnet"));
+    }
+
+    #[test]
+    fn rpc_telemetry_empty_is_disabled() {
+        for value in ["", "  ", ",", " , "] {
+            let networks = RpcTelemetryNetworks::parse(Some(value));
+            assert_eq!(networks, RpcTelemetryNetworks::Disabled, "{value:?}");
+            assert!(!networks.enabled_for(""));
+        }
+    }
+
+    #[test]
+    fn rpc_telemetry_star_enables_every_network() {
+        let networks = RpcTelemetryNetworks::parse(Some("*"));
+        assert_eq!(networks, RpcTelemetryNetworks::All);
+        assert!(networks.enabled_for("cardano-mainnet"));
+        assert!(networks.enabled_for("prime-testnet"));
+    }
+
+    #[test]
+    fn rpc_telemetry_comma_list_matches_exactly() {
+        let networks = RpcTelemetryNetworks::parse(Some("cardano-preprod,vector-testnet"));
+        assert_eq!(
+            networks,
+            RpcTelemetryNetworks::Only(vec!["cardano-preprod".into(), "vector-testnet".into()])
+        );
+        assert!(networks.enabled_for("cardano-preprod"));
+        assert!(networks.enabled_for("vector-testnet"));
+        assert!(!networks.enabled_for("cardano-mainnet"));
+        assert!(!networks.enabled_for("preprod"));
+        assert!(!networks.enabled_for("cardano-preprod-v6"));
     }
 }

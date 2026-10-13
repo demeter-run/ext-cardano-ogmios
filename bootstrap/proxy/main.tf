@@ -108,6 +108,12 @@ variable "cloud_provider" {
   default = "aws"
 }
 
+variable "rpc_telemetry_networks" {
+  description = "Networks whose client JSON-RPC messages are classified and counted; empty disables it"
+  type        = list(string)
+  default     = []
+}
+
 variable "healthcheck_port" {
   type    = number
   default = null

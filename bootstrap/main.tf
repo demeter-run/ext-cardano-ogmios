@@ -45,6 +45,8 @@ module "ogmios_v1_proxies_blue" {
   resources         = var.proxy_resources
   tolerations       = var.proxy_tolerations
   versions          = var.versions
+
+  rpc_telemetry_networks = var.proxy_rpc_telemetry_networks
 }
 
 module "ogmios_v1_proxies_green" {
@@ -66,6 +68,8 @@ module "ogmios_v1_proxies_green" {
   resources         = var.proxy_resources
   tolerations       = var.proxy_tolerations
   versions          = var.versions
+
+  rpc_telemetry_networks = var.proxy_rpc_telemetry_networks
 }
 
 // mainnet
