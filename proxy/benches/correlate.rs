@@ -1,4 +1,4 @@
-//! Response observation cost. The plan's budgets: every scan under 2 µs, and
+//! Response observation cost. Budgets: every scan under 2 µs, and
 //! the 8 MiB frame within 2× of the 200 B one, because a scan reads only the
 //! head and the tail of a frame.
 
