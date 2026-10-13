@@ -1,4 +1,5 @@
 use config::Config;
+use connections::Connections;
 use dotenv::dotenv;
 use leaky_bucket::RateLimiter;
 use metrics::Metrics;
@@ -17,6 +18,7 @@ use crate::utils::handle_legacy_networks;
 
 mod auth;
 mod config;
+mod connections;
 mod health;
 mod limiter;
 mod metrics;
@@ -51,12 +53,17 @@ pub struct State {
     consumers: RwLock<HashMap<String, Consumer>>,
     tiers: RwLock<HashMap<String, Tier>>,
     limiter: RwLock<HashMap<String, Vec<Arc<RateLimiter>>>>,
+    connections: Arc<Connections>,
     upstream_health: RwLock<bool>,
 }
 impl State {
     pub fn try_new() -> Result<Self, Box<dyn Error>> {
-        let config = Config::new();
-        let metrics = Metrics::try_new(Registry::default())?;
+        Self::with_config(Config::new())
+    }
+
+    pub fn with_config(config: Config) -> Result<Self, Box<dyn Error>> {
+        let connections = Arc::new(Connections::default());
+        let metrics = Metrics::try_new(Registry::default(), connections.clone())?;
         let host_regex = Regex::new(r"([dmtr_]?[\w\d-]+)?\.?.+")?;
         let consumers = Default::default();
         let tiers = Default::default();
@@ -69,6 +76,7 @@ impl State {
             consumers,
             tiers,
             limiter,
+            connections,
             upstream_health: RwLock::new(false),
         })
     }
@@ -86,7 +94,6 @@ pub struct Consumer {
     key: String,
     network: String,
     version: String,
-    active_connections: usize,
 }
 impl Display for Consumer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -109,34 +116,6 @@ impl From<&OgmiosPort> for Consumer {
             key,
             network,
             version,
-            active_connections: 0,
         }
-    }
-}
-impl Consumer {
-    pub async fn inc_connections(&self, state: Arc<State>) {
-        state
-            .consumers
-            .write()
-            .await
-            .entry(self.key.clone())
-            .and_modify(|consumer| consumer.active_connections += 1);
-    }
-    pub async fn dec_connections(&self, state: Arc<State>) {
-        state
-            .consumers
-            .write()
-            .await
-            .entry(self.key.clone())
-            .and_modify(|consumer| consumer.active_connections -= 1);
-    }
-    pub async fn get_active_connections(&self, state: Arc<State>) -> usize {
-        state
-            .consumers
-            .read()
-            .await
-            .get(&self.key)
-            .map(|consumer| consumer.active_connections)
-            .unwrap_or_default()
     }
 }
