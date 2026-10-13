@@ -71,7 +71,7 @@ pub fn scan_head(frame: &[u8]) -> Head {
     let head = &frame[..frame.len().min(HEAD_BYTES)];
 
     let result_at = find_key(head, RESULT_KEY).map(|(key, _)| key);
-    let error = find_key(head, ERROR_KEY).filter(|(key, _)| result_at.is_none_or(|at| *key < at));
+    let error = find_key(head, ERROR_KEY).filter(|(key, _)| precedes(*key, result_at));
     let body_at = match (result_at, error) {
         (Some(at), _) => Some(at),
         (None, Some((at, _))) => Some(at),
@@ -80,7 +80,7 @@ pub fn scan_head(frame: &[u8]) -> Head {
 
     // A `"method"` key inside `result` or `error.data` is not the echo.
     let method = find_key(head, METHOD_KEY)
-        .filter(|(key, _)| body_at.is_none_or(|at| *key < at))
+        .filter(|(key, _)| precedes(*key, body_at))
         .and_then(|(key, _)| scan_method(&head[key + METHOD_KEY.len()..]))
         .map(Method::from_name);
 
@@ -116,6 +116,14 @@ pub fn scan_id(frame: &[u8]) -> RequestId {
     // The token is short by construction, so parsing it costs a constant. The
     // same deserializer as the request side keeps string hashes comparable.
     serde_json::from_slice(&window[value..]).unwrap_or(RequestId::Other)
+}
+
+/// Whether a key at `key` comes before `at`, or `at` is absent.
+fn precedes(key: usize, at: Option<usize>) -> bool {
+    match at {
+        Some(at) => key < at,
+        None => true,
+    }
 }
 
 /// Finds the first `key` that is followed by `:`, and returns where the key
