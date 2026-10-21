@@ -54,6 +54,7 @@ expect "$fixtures/warn-old-lines.lock" 0 "WARN rustls-webpki 0.102.8:"
 
 expect "$tmp/empty.lock" 2 "not a Cargo.lock"
 expect "$fixtures/not-a-lockfile.txt" 2 "not a Cargo.lock"
+expect "$fixtures/not-a-lockfile-manifest.toml" 2 "not a Cargo.lock"
 expect "$tmp/missing.lock" 2 "not found"
 
 if [ "$failures" -ne 0 ]; then
