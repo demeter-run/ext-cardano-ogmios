@@ -18,5 +18,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Test trust-floor check
+        run: sh scripts/test-trust-floor.sh
+
+      - name: Check trust floor
+        run: sh scripts/check-trust-floor.sh
+
       - name: Run tests
         run: cargo test --workspace --locked
