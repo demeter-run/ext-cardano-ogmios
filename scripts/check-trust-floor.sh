@@ -15,16 +15,19 @@ if [ ! -f "$lock" ]; then
 fi
 
 awk '
-  # Compare dotted numeric versions; pre-release suffixes are ignored.
-  function below(v, floor,    a, b, i, n) {
-    sub(/[-+].*/, "", v)
+  # Compare dotted numeric versions. Build metadata (+...) is ignored; a
+  # pre-release (-...) orders below its release, so 1.0.10-rc.1 < 1.0.10.
+  function below(v, floor,    a, b, i, n, pre) {
+    sub(/\+.*/, "", v)
+    pre = (v ~ /-/)
+    sub(/-.*/, "", v)
     split(v, a, ".")
     n = split(floor, b, ".")
     for (i = 1; i <= n; i++) {
       if (a[i] + 0 < b[i] + 0) return 1
       if (a[i] + 0 > b[i] + 0) return 0
     }
-    return 0
+    return pre
   }
 
   function check(name, version,    major, minor, p) {
@@ -49,9 +52,18 @@ awk '
     }
   }
 
-  /^\[\[package\]\]/ { name = ""; next }
-  /^name = / { name = $3; gsub(/"/, "", name); next }
-  /^version = / {
+  { sub(/\r$/, "") }
+
+  # Only [[package]] entries are resolved; every other section header
+  # ([[patch.unused]], [metadata], ...) ends the current package.
+  /^\[/ {
+    inpkg = ($0 ~ /^\[\[package\]\][ \t]*$/)
+    if (inpkg) packages++
+    name = ""
+    next
+  }
+  inpkg && /^name = / { name = $3; gsub(/"/, "", name); next }
+  inpkg && /^version = / {
     version = $3
     gsub(/"/, "", version)
     if (name != "") check(name, version)
@@ -59,6 +71,10 @@ awk '
   }
 
   END {
+    if (!packages) {
+      print "check-trust-floor: no [[package]] entries; not a Cargo.lock" > "/dev/stderr"
+      exit 2
+    }
     if (failed) exit 1
     print "check-trust-floor: ok"
   }
